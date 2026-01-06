@@ -9,6 +9,8 @@ fn parse_optimize_minimal() {
         Command::Optimize(args) => {
             assert_eq!(args.input.as_os_str(), "hoge.mbtiles");
             assert_eq!(args.output, None);
+            assert_eq!(args.input_format, None);
+            assert_eq!(args.output_format, None);
             assert_eq!(args.style, None);
             assert_eq!(args.style_mode, StyleMode::LayerFilter);
             assert_eq!(args.max_tile_bytes, 1_280_000);
@@ -29,6 +31,10 @@ fn parse_optimize_options() {
         "planet.mbtiles",
         "--output",
         "out.pmtiles",
+        "--input-format",
+        "mbtiles",
+        "--output-format",
+        "pmtiles",
         "--style",
         "style.json",
         "--style-mode",
@@ -48,6 +54,8 @@ fn parse_optimize_options() {
         Command::Optimize(args) => {
             assert_eq!(args.input.as_os_str(), "planet.mbtiles");
             assert_eq!(args.output.unwrap().as_os_str(), "out.pmtiles");
+            assert_eq!(args.input_format.unwrap(), "mbtiles");
+            assert_eq!(args.output_format.unwrap(), "pmtiles");
             assert_eq!(args.style.unwrap().as_os_str(), "style.json");
             assert_eq!(args.style_mode, StyleMode::LayerFilter);
             assert_eq!(args.max_tile_bytes, 2048);

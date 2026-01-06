@@ -44,6 +44,12 @@ pub struct OptimizeArgs {
     pub output: Option<PathBuf>,
 
     #[arg(long)]
+    pub input_format: Option<String>,
+
+    #[arg(long)]
+    pub output_format: Option<String>,
+
+    #[arg(long)]
     pub style: Option<PathBuf>,
 
     #[arg(long, value_enum, default_value_t = StyleMode::LayerFilter)]
