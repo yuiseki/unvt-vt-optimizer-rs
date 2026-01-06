@@ -1,0 +1,93 @@
+use std::path::Path;
+
+use anyhow::{Context, Result};
+use rusqlite::{params, Connection};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MbtilesStats {
+    pub tile_count: u64,
+    pub total_bytes: u64,
+    pub max_bytes: u64,
+}
+
+pub fn inspect_mbtiles(path: &Path) -> Result<MbtilesStats> {
+    let conn = Connection::open(path).with_context(|| {
+        format!("failed to open mbtiles: {}", path.display())
+    })?;
+
+    let (count, total, max): (u64, Option<u64>, Option<u64>) = conn
+        .query_row(
+            "SELECT COUNT(*), SUM(LENGTH(tile_data)), MAX(LENGTH(tile_data)) FROM tiles",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .context("failed to read tiles stats")?;
+
+    Ok(MbtilesStats {
+        tile_count: count,
+        total_bytes: total.unwrap_or(0),
+        max_bytes: max.unwrap_or(0),
+    })
+}
+
+pub fn copy_mbtiles(input: &Path, output: &Path) -> Result<()> {
+    let input_conn = Connection::open(input)
+        .with_context(|| format!("failed to open input mbtiles: {}", input.display()))?;
+    let mut output_conn = Connection::open(output)
+        .with_context(|| format!("failed to open output mbtiles: {}", output.display()))?;
+
+    output_conn
+        .execute_batch(
+            "
+            CREATE TABLE metadata (name TEXT, value TEXT);
+            CREATE TABLE tiles (
+                zoom_level INTEGER,
+                tile_column INTEGER,
+                tile_row INTEGER,
+                tile_data BLOB
+            );
+            ",
+        )
+        .context("failed to create output schema")?;
+
+    let tx = output_conn.transaction().context("begin output transaction")?;
+
+    {
+        let mut stmt = input_conn
+            .prepare("SELECT name, value FROM metadata")
+            .context("prepare metadata")?;
+        let mut rows = stmt.query([]).context("query metadata")?;
+        while let Some(row) = rows.next().context("read metadata row")? {
+            let name: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            tx.execute(
+                "INSERT INTO metadata (name, value) VALUES (?1, ?2)",
+                params![name, value],
+            )
+            .context("insert metadata")?;
+        }
+    }
+
+    {
+        let mut stmt = input_conn
+            .prepare(
+                "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles ORDER BY zoom_level, tile_column, tile_row",
+            )
+            .context("prepare tiles")?;
+        let mut rows = stmt.query([]).context("query tiles")?;
+        while let Some(row) = rows.next().context("read tile row")? {
+            let z: i64 = row.get(0)?;
+            let x: i64 = row.get(1)?;
+            let y: i64 = row.get(2)?;
+            let data: Vec<u8> = row.get(3)?;
+            tx.execute(
+                "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
+                params![z, x, y, data],
+            )
+            .context("insert tile")?;
+        }
+    }
+
+    tx.commit().context("commit output")?;
+    Ok(())
+}

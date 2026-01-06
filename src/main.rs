@@ -3,6 +3,7 @@ use clap::Parser;
 
 use tile_prune::cli::{Cli, Command};
 use tile_prune::format::{plan_copy, plan_optimize, resolve_output_path};
+use tile_prune::mbtiles::{copy_mbtiles, inspect_mbtiles};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -10,7 +11,11 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Inspect(args) => {
-            println!("inspect: input={}", args.input.display());
+            let stats = inspect_mbtiles(&args.input)?;
+            println!(
+                "tiles: {} total_bytes: {} max_bytes: {}",
+                stats.tile_count, stats.total_bytes, stats.max_bytes
+            );
         }
         Command::Optimize(args) => {
             let decision = plan_optimize(
@@ -35,6 +40,12 @@ fn main() -> Result<()> {
             )?;
             let _output_path =
                 resolve_output_path(&args.input, args.output.as_deref(), decision.output);
+            if decision.input != tile_prune::format::TileFormat::Mbtiles
+                || decision.output != tile_prune::format::TileFormat::Mbtiles
+            {
+                anyhow::bail!("v0.0.2 supports only MBTiles for copy");
+            }
+            copy_mbtiles(&args.input, &_output_path)?;
             println!("copy: input={}", args.input.display());
         }
         Command::Verify(args) => {
