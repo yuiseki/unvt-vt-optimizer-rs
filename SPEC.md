@@ -57,6 +57,28 @@ tile-prune は、**Mapbox Vector Tiles (MVT)** を格納した **MBTiles / PMTil
 
 ---
 
+## 1.3 マイルストーン（v0.0.1）
+
+今日やりきる最小スコープとして、以下を v0.0.1 とする。
+
+* CLI 骨格が動作し、引数解析がテストで保証される
+  * `inspect` / `optimize` / `copy` / `simplify` / `verify` が起動できる（処理本体は未実装で可）
+* 入出力フォーマット推定のルールが実装済み
+  * `--input-format` / `--output-format` で上書き可能
+  * `--output-format` と `--output` 拡張子の矛盾は **エラー（exit 1）**
+* `copy` / `optimize` はフォーマット決定まで実施する（I/O は未実装で可）
+* `cargo test` が通ること
+
+v0.0.1 では以下を **含めない**。
+
+* MBTiles/PMTiles の読み書き・変換処理
+* inspect の統計計算
+* style.json の解釈
+* simplify の実装
+* sidecar / checkpoint / JSON レポート
+
+---
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）
@@ -393,4 +415,3 @@ SQLite については WAL が「reader/writer の同時進行」に寄与し得
 * MBTiles の TMS 反転は、MBTiles で一般に前提とされる（Y を反転する）扱いに合わせる。
 * Style filter の意味論（一致 feature のみ表示、整数 zoom、feature-state 非対応）は Mapbox/MapLibre の記述に合わせる。
 * PMTiles は v3 を正とし、read-only である点に留意して出力設計を行う。
-
