@@ -1,0 +1,18 @@
+{
+    "cSpell.words": [
+        "flate",
+        "libsqlite",
+        "Mapbox",
+        "maxzoom",
+        "mbtiles",
+        "minzoom",
+        "pmtiles",
+        "prost",
+        "Protomaps",
+        "rusqlite",
+        "serde",
+        "tile-prune",
+        "tileset",
+        "topn"
+    ]
+}
