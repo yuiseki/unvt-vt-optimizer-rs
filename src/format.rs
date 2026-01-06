@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileFormat {
@@ -67,4 +67,27 @@ pub fn require_known_output_extension(path: &Path) -> Result<TileFormat> {
             "output path must have .mbtiles or .pmtiles extension when output format is not provided"
         )
     })
+}
+
+pub fn validate_output_format_matches_path(
+    output_path: Option<&Path>,
+    output_format: Option<&str>,
+) -> Result<()> {
+    let (path, fmt_name) = match (output_path, output_format) {
+        (Some(path), Some(name)) => (path, name),
+        _ => return Ok(()),
+    };
+
+    let declared = TileFormat::from_str(fmt_name)
+        .ok_or_else(|| anyhow::anyhow!("unknown output format: {fmt_name}"))?;
+
+    if let Some(path_fmt) = TileFormat::from_extension(path) {
+        if path_fmt != declared {
+            bail!(
+                "output format ({fmt_name}) conflicts with output file extension",
+            );
+        }
+    }
+
+    Ok(())
 }

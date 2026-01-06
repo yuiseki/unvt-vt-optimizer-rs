@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use tile_prune::cli::{Cli, Command};
+use tile_prune::format::validate_output_format_matches_path;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -12,12 +13,20 @@ fn main() -> Result<()> {
             println!("inspect: input={}", args.input.display());
         }
         Command::Optimize(args) => {
+            validate_output_format_matches_path(
+                args.output.as_deref(),
+                args.output_format.as_deref(),
+            )?;
             println!("optimize: input={}", args.input.display());
         }
         Command::Simplify(args) => {
             println!("simplify: input={} z={} x={} y={}", args.input.display(), args.z, args.x, args.y);
         }
         Command::Copy(args) => {
+            validate_output_format_matches_path(
+                args.output.as_deref(),
+                args.output_format.as_deref(),
+            )?;
             println!("copy: input={}", args.input.display());
         }
         Command::Verify(args) => {

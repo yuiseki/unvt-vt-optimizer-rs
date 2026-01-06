@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use tile_prune::format::{decide_formats, TileFormat};
+use tile_prune::format::validate_output_format_matches_path;
 
 #[test]
 fn decide_formats_infer_from_extensions() {
@@ -88,4 +89,46 @@ fn decide_formats_errors_on_unknown_override() {
 
     let msg = err.to_string();
     assert!(msg.contains("unknown input format"));
+}
+
+#[test]
+fn validate_output_format_conflict_errors() {
+    let err = validate_output_format_matches_path(
+        Some(Path::new("out.pmtiles")),
+        Some("mbtiles"),
+    )
+    .expect_err("should error");
+
+    let msg = err.to_string();
+    assert!(msg.contains("conflicts"));
+}
+
+#[test]
+fn validate_output_format_matches_extension_ok() {
+    validate_output_format_matches_path(
+        Some(Path::new("out.mbtiles")),
+        Some("mbtiles"),
+    )
+    .expect("should pass");
+}
+
+#[test]
+fn validate_output_format_with_no_extension_ok() {
+    validate_output_format_matches_path(
+        Some(Path::new("out")),
+        Some("pmtiles"),
+    )
+    .expect("should pass");
+}
+
+#[test]
+fn validate_output_format_unknown_errors() {
+    let err = validate_output_format_matches_path(
+        Some(Path::new("out.mbtiles")),
+        Some("tilejson"),
+    )
+    .expect_err("should error");
+
+    let msg = err.to_string();
+    assert!(msg.contains("unknown output format"));
 }
