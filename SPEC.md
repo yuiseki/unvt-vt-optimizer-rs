@@ -97,6 +97,23 @@ v0.0.2 では以下を **含めない**。
 
 ---
 
+## 1.5 マイルストーン（v0.0.3）
+
+* `copy` の拡張
+  * MBTiles → PMTiles（最小構成での書き出し）
+  * PMTiles → MBTiles（最小構成での読み取り）
+* `inspect` の拡張
+  * zoom 別の tile count / total bytes / max bytes を出力
+* `optimize` はフォーマット決定のみ（処理は未実装）
+
+v0.0.3 では以下を **含めない**。
+
+* style/filter の解釈
+* simplify 実装
+* sidecar / checkpoint / JSON レポート
+
+---
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）
