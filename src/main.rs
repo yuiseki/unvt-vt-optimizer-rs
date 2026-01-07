@@ -95,11 +95,11 @@ fn main() -> Result<()> {
                 }
                 ReportFormat::Text => {
                     println!(
-                        "tiles: {} total_bytes: {} max_bytes: {} avg_bytes: {}",
+                        "tiles: {} total: {} max: {} avg: {}",
                         report.overall.tile_count,
-                        report.overall.total_bytes,
-                        report.overall.max_bytes,
-                        report.overall.avg_bytes
+                        format_bytes(report.overall.total_bytes),
+                        format_bytes(report.overall.max_bytes),
+                        format_bytes(report.overall.avg_bytes)
                     );
                     println!(
                         "empty_tiles: {} empty_ratio: {:.4}",
@@ -113,16 +113,49 @@ fn main() -> Result<()> {
                     }
                     for zoom in report.by_zoom.iter() {
                         println!(
-                            "z={}: tiles={} total_bytes={} max_bytes={} avg_bytes={}",
+                            "z={}: tiles={} total={} max={} avg={}",
                             zoom.zoom,
                             zoom.stats.tile_count,
-                            zoom.stats.total_bytes,
-                            zoom.stats.max_bytes,
-                            zoom.stats.avg_bytes
+                            format_bytes(zoom.stats.total_bytes),
+                            format_bytes(zoom.stats.max_bytes),
+                            format_bytes(zoom.stats.avg_bytes)
                         );
                     }
                     if !report.histogram.is_empty() {
                         println!("histogram:");
+                        let count_width = report
+                            .histogram
+                            .iter()
+                            .map(|b| b.count)
+                            .max()
+                            .unwrap_or(0)
+                            .to_string()
+                            .len()
+                            .max("count".len());
+                        let bytes_width = report
+                            .histogram
+                            .iter()
+                            .map(|b| format_bytes(b.total_bytes).len())
+                            .max()
+                            .unwrap_or(0)
+                            .max("bytes".len());
+                        let avg_width = report
+                            .histogram
+                            .iter()
+                            .map(|b| format_bytes(b.running_avg_bytes).len())
+                            .max()
+                            .unwrap_or(0)
+                            .max("avg".len());
+                        println!(
+                            "{} {} {} {} {} {} {}",
+                            pad_right("range", 17),
+                            pad_left("count", count_width),
+                            pad_left("bytes", bytes_width),
+                            pad_left("avg", avg_width),
+                            pad_left("%tiles", 7),
+                            pad_left("%size", 7),
+                            pad_left("acc%tiles", 9),
+                        );
                         for bucket in report.histogram.iter() {
                             let warn = if bucket.avg_over_limit {
                                 "over"
@@ -131,31 +164,67 @@ fn main() -> Result<()> {
                             } else {
                                 ""
                             };
+                            let range = format!(
+                                "{}-{}",
+                                format_bytes(bucket.min_bytes),
+                                format_bytes(bucket.max_bytes)
+                            );
                             println!(
-                                "{}-{}: count={} bytes={} running_avg={} pct_tiles={:.4} pct_size={:.4} accum_pct_tiles={:.4} accum_pct_size={:.4} {}",
-                                bucket.min_bytes,
-                                bucket.max_bytes,
-                                bucket.count,
-                                bucket.total_bytes,
-                                bucket.running_avg_bytes,
-                                bucket.pct_tiles,
-                                bucket.pct_level_bytes,
-                                bucket.accum_pct_tiles,
-                                bucket.accum_pct_level_bytes,
+                                "{} {} {} {} {:>7.2}% {:>7.2}% {:>9.2}% {}",
+                                pad_right(&range, 17),
+                                pad_left(&bucket.count.to_string(), count_width),
+                                pad_left(&format_bytes(bucket.total_bytes), bytes_width),
+                                pad_left(&format_bytes(bucket.running_avg_bytes), avg_width),
+                                bucket.pct_tiles * 100.0,
+                                bucket.pct_level_bytes * 100.0,
+                                bucket.accum_pct_tiles * 100.0,
                                 warn
                             );
                         }
                     }
                     if !report.file_layers.is_empty() {
                         println!("layers:");
+                        let name_width = report
+                            .file_layers
+                            .iter()
+                            .map(|l| l.name.len())
+                            .max()
+                            .unwrap_or(4)
+                            .max("name".len());
+                        let features_width = report
+                            .file_layers
+                            .iter()
+                            .map(|l| l.feature_count)
+                            .max()
+                            .unwrap_or(0)
+                            .to_string()
+                            .len()
+                            .max("features".len());
+                        let keys_width = report
+                            .file_layers
+                            .iter()
+                            .map(|l| l.property_key_count)
+                            .max()
+                            .unwrap_or(0)
+                            .to_string()
+                            .len()
+                            .max("keys".len());
+                        println!(
+                            "{} {} {} {} {}",
+                            pad_right("name", name_width),
+                            pad_left("features", features_width),
+                            pad_left("keys", keys_width),
+                            pad_left("extent", 6),
+                            pad_left("ver", 3),
+                        );
                         for layer in report.file_layers.iter() {
                             println!(
-                                "name={} features={} property_keys={} extent={} version={}",
-                                layer.name,
-                                layer.feature_count,
-                                layer.property_key_count,
-                                layer.extent,
-                                layer.version
+                                "{} {} {} {} {}",
+                                pad_right(&layer.name, name_width),
+                                pad_left(&layer.feature_count.to_string(), features_width),
+                                pad_left(&layer.property_key_count.to_string(), keys_width),
+                                pad_left(&layer.extent.to_string(), 6),
+                                pad_left(&layer.version.to_string(), 3),
                             );
                         }
                     }
@@ -276,4 +345,25 @@ fn init_tracing(level: &str) {
         tracing_subscriber::EnvFilter::new("info")
     });
     tracing_subscriber::fmt().with_env_filter(filter).init();
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    let value = bytes as f64;
+    if value >= MB {
+        format!("{:.2}MB", value / MB)
+    } else if value >= KB {
+        format!("{:.2}KB", value / KB)
+    } else {
+        format!("{}B", bytes)
+    }
+}
+
+fn pad_right(value: &str, width: usize) -> String {
+    format!("{value:width$}")
+}
+
+fn pad_left(value: &str, width: usize) -> String {
+    format!("{value:>width$}")
 }
