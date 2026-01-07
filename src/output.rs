@@ -239,9 +239,18 @@ pub fn format_histograms_by_zoom_section(histograms: &[ZoomHistogram]) -> Vec<St
     let mut lines = Vec::new();
     lines.push("## Histogram by Zoom".to_string());
     for item in items.iter() {
+        let buckets = item
+            .buckets
+            .iter()
+            .cloned()
+            .filter(|bucket| bucket.count > 0)
+            .collect::<Vec<_>>();
+        if buckets.is_empty() {
+            continue;
+        }
         lines.push(String::new());
         lines.push(format!("### z={}", item.zoom));
-        lines.extend(format_histogram_table(&item.buckets));
+        lines.extend(format_histogram_table(&buckets));
     }
     lines
 }
