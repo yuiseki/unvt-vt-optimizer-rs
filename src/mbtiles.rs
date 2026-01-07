@@ -1,9 +1,12 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap};
 use std::path::Path;
+use std::io::Read;
 
 use anyhow::{Context, Result};
+use flate2::read::GzDecoder;
 use indicatif::{ProgressBar, ProgressStyle};
+use mvt_reader::Reader;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
 
@@ -34,6 +37,7 @@ pub struct MbtilesReport {
     pub top_tiles: Vec<TopTile>,
     pub bucket_count: Option<u64>,
     pub bucket_tiles: Vec<TopTile>,
+    pub tile_summary: Option<TileSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -51,6 +55,27 @@ pub struct TopTile {
     pub bytes: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LayerSummary {
+    pub name: String,
+    pub feature_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TileSummary {
+    pub zoom: u8,
+    pub x: u32,
+    pub y: u32,
+    pub layers: Vec<LayerSummary>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TileCoord {
+    pub zoom: u8,
+    pub x: u32,
+    pub y: u32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SampleSpec {
     Ratio(f64),
@@ -65,6 +90,8 @@ pub struct InspectOptions {
     pub no_progress: bool,
     pub zoom: Option<u8>,
     pub bucket: Option<usize>,
+    pub tile: Option<TileCoord>,
+    pub summary: bool,
     pub list_tiles: Option<TileListOptions>,
 }
 
@@ -77,6 +104,8 @@ impl Default for InspectOptions {
             no_progress: false,
             zoom: None,
             bucket: None,
+            tile: None,
+            summary: false,
             list_tiles: None,
         }
     }
@@ -138,6 +167,34 @@ pub fn parse_sample_spec(value: &str) -> Result<SampleSpec> {
     }
     let as_u64: u64 = trimmed.parse().context("invalid sample count")?;
     Ok(SampleSpec::Count(as_u64))
+}
+
+pub fn parse_tile_spec(value: &str) -> Result<TileCoord> {
+    let trimmed = value.trim();
+    let mut parts = trimmed.split('/');
+    let zoom_str = parts.next().context("tile must be in z/x/y format")?;
+    let x_str = parts.next().context("tile must be in z/x/y format")?;
+    let y_str = parts.next().context("tile must be in z/x/y format")?;
+    if parts.next().is_some() {
+        anyhow::bail!("tile must be in z/x/y format");
+    }
+    let zoom: u8 = zoom_str.parse().context("invalid tile zoom")?;
+    let x: u32 = x_str.parse().context("invalid tile x")?;
+    let y: u32 = y_str.parse().context("invalid tile y")?;
+    Ok(TileCoord { zoom, x, y })
+}
+
+fn decode_tile_payload(data: &[u8]) -> Result<Vec<u8>> {
+    if data.starts_with(&[0x1f, 0x8b]) {
+        let mut decoder = GzDecoder::new(data);
+        let mut decoded = Vec::new();
+        decoder
+            .read_to_end(&mut decoded)
+            .context("decode gzip tile data")?;
+        Ok(decoded)
+    } else {
+        Ok(data.to_vec())
+    }
 }
 
 fn include_sample(index: u64, total: u64, spec: Option<&SampleSpec>) -> bool {
@@ -277,6 +334,40 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     ensure_mbtiles_path(path)?;
     let conn = open_readonly_mbtiles(path)?;
     apply_read_pragmas(&conn)?;
+
+    let tile_summary = if options.summary {
+        let coord = options
+            .tile
+            .context("--summary requires --tile z/x/y")?;
+        let data: Vec<u8> = conn
+            .query_row(
+                "SELECT tile_data FROM tiles WHERE zoom_level = ?1 AND tile_column = ?2 AND tile_row = ?3",
+                params![coord.zoom, coord.x, coord.y],
+                |row| row.get(0),
+            )
+            .context("failed to read tile data")?;
+        let payload = decode_tile_payload(&data)?;
+        let reader = Reader::new(payload)
+            .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+        let layers = reader
+            .get_layer_metadata()
+            .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
+        let layers = layers
+            .into_iter()
+            .map(|layer| LayerSummary {
+                name: layer.name,
+                feature_count: layer.feature_count,
+            })
+            .collect::<Vec<_>>();
+        Some(TileSummary {
+            zoom: coord.zoom,
+            x: coord.x,
+            y: coord.y,
+            layers,
+        })
+    } else {
+        None
+    };
 
     let total_tiles: u64 = match options.zoom {
         Some(z) => conn
@@ -463,6 +554,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         top_tiles,
         bucket_count,
         bucket_tiles,
+        tile_summary,
     })
 }
 

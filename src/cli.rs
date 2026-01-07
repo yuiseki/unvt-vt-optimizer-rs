@@ -50,6 +50,12 @@ pub struct InspectArgs {
     #[arg(long)]
     pub bucket: Option<usize>,
 
+    #[arg(long)]
+    pub tile: Option<String>,
+
+    #[arg(long, default_value_t = false)]
+    pub summary: bool,
+
     #[arg(long, default_value_t = false)]
     pub list_tiles: bool,
 

@@ -4,8 +4,8 @@ use clap::Parser;
 use tile_prune::cli::{Cli, Command, ReportFormat, TileSortArg};
 use tile_prune::format::{plan_copy, plan_optimize, resolve_output_path};
 use tile_prune::mbtiles::{
-    copy_mbtiles, inspect_mbtiles_with_options, parse_sample_spec, InspectOptions, TileListOptions,
-    TileSort,
+    copy_mbtiles, inspect_mbtiles_with_options, parse_sample_spec, parse_tile_spec, InspectOptions,
+    TileListOptions, TileSort,
 };
 use tile_prune::pmtiles::{mbtiles_to_pmtiles, pmtiles_to_mbtiles};
 
@@ -19,6 +19,16 @@ fn main() -> Result<()> {
                 Some(value) => Some(parse_sample_spec(value)?),
                 None => None,
             };
+            let tile = match args.tile.as_deref() {
+                Some(value) => Some(parse_tile_spec(value)?),
+                None => None,
+            };
+            if args.summary && tile.is_none() {
+                anyhow::bail!("--summary requires --tile z/x/y");
+            }
+            if tile.is_some() && !args.summary {
+                anyhow::bail!("--tile requires --summary");
+            }
             let options = InspectOptions {
                 sample,
                 topn: args.topn.unwrap_or(0) as usize,
@@ -26,6 +36,8 @@ fn main() -> Result<()> {
                 no_progress: args.no_progress,
                 zoom: args.zoom,
                 bucket: args.bucket,
+                tile,
+                summary: args.summary,
                 list_tiles: if args.list_tiles {
                     Some(TileListOptions {
                         limit: args.limit,
@@ -100,6 +112,12 @@ fn main() -> Result<()> {
                                 "z={}: x={} y={} bytes={}",
                                 tile.zoom, tile.x, tile.y, tile.bytes
                             );
+                        }
+                    }
+                    if let Some(summary) = report.tile_summary.as_ref() {
+                        println!("tile_summary: z={} x={} y={}", summary.zoom, summary.x, summary.y);
+                        for layer in summary.layers.iter() {
+                            println!("layer: {} features={}", layer.name, layer.feature_count);
                         }
                     }
                 }

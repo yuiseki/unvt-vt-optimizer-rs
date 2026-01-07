@@ -53,6 +53,8 @@ fn list_tiles_sorted_by_size_with_limit() {
         no_progress: true,
         zoom: Some(2),
         bucket: Some(0),
+        tile: None,
+        summary: false,
         list_tiles: Some(TileListOptions {
             limit: 2,
             sort: TileSort::Size,
@@ -78,6 +80,8 @@ fn list_tiles_sorted_by_zxy() {
         no_progress: true,
         zoom: Some(2),
         bucket: Some(1),
+        tile: None,
+        summary: false,
         list_tiles: Some(TileListOptions {
             limit: 10,
             sort: TileSort::Zxy,
