@@ -335,6 +335,12 @@ v0.0.4 では以下を **含めない**。
 
 ## 1.36 マイルストーン（v0.0.34）
 
+* PMTiles の zoom 別ヒストグラム（Histogram by Zoom）を `inspect` に追加
+
+---
+
+## 1.37 マイルストーン（v0.0.35）
+
 * PMTiles の layer 解析（text 出力の Layers セクション相当）
 
 ---

@@ -3,6 +3,7 @@ use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 
 use brotli::CompressorWriter;
+use mvt::{GeomEncoder, GeomType, Tile};
 use tile_prune::mbtiles::{inspect_mbtiles, InspectOptions};
 use tile_prune::pmtiles::{inspect_pmtiles_with_options, mbtiles_to_pmtiles, pmtiles_to_mbtiles};
 
@@ -40,6 +41,58 @@ fn create_sample_mbtiles(path: &Path) {
         (tile2,),
     )
     .expect("tile2");
+}
+
+fn create_layer_tile() -> Vec<u8> {
+    let mut tile = Tile::new(4096);
+
+    let layer = tile.create_layer("roads");
+    let geom = GeomEncoder::new(GeomType::Point)
+        .point(1.0, 2.0)
+        .expect("point")
+        .encode()
+        .expect("encode");
+    let mut feature = layer.into_feature(geom);
+    feature.add_tag_string("class", "primary");
+    feature.add_tag_string("name", "Main");
+    let layer = feature.into_layer();
+    tile.add_layer(layer).expect("add roads");
+
+    let layer = tile.create_layer("buildings");
+    let geom = GeomEncoder::new(GeomType::Point)
+        .point(3.0, 4.0)
+        .expect("point")
+        .encode()
+        .expect("encode");
+    let mut feature = layer.into_feature(geom);
+    feature.add_tag_string("height", "10");
+    let layer = feature.into_layer();
+    tile.add_layer(layer).expect("add buildings");
+
+    tile.to_bytes().expect("tile bytes")
+}
+
+fn create_layer_mbtiles(path: &Path) {
+    let conn = rusqlite::Connection::open(path).expect("open");
+    conn.execute_batch(
+        "
+        CREATE TABLE metadata (name TEXT, value TEXT);
+        CREATE TABLE tiles (
+            zoom_level INTEGER,
+            tile_column INTEGER,
+            tile_row INTEGER,
+            tile_data BLOB
+        );
+        ",
+    )
+    .expect("schema");
+
+    let data = create_layer_tile();
+    conn.execute(
+        "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (0, 0, 0, ?1)",
+        (data,),
+    )
+    .expect("tile insert");
 }
 
 fn write_pmtiles_with_metadata(path: &Path, metadata_json: &str) {
@@ -237,4 +290,32 @@ fn inspect_pmtiles_builds_histograms_by_zoom() {
     assert_eq!(z1.buckets.len(), 3);
     assert_eq!(z1.buckets[0].count, 1);
     assert_eq!(z1.buckets[0].total_bytes, 20);
+}
+
+#[test]
+fn inspect_pmtiles_collects_layer_list() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let input = dir.path().join("input.mbtiles");
+    let pmtiles = dir.path().join("output.pmtiles");
+    create_layer_mbtiles(&input);
+
+    mbtiles_to_pmtiles(&input, &pmtiles).expect("mbtiles->pmtiles");
+    let mut options = InspectOptions::default();
+    options.histogram_buckets = 0;
+    options.include_layer_list = true;
+    let report = inspect_pmtiles_with_options(&pmtiles, &options).expect("inspect pmtiles");
+
+    let mut layers = report.file_layers.clone();
+    layers.sort_by(|a, b| a.name.cmp(&b.name));
+    assert_eq!(layers.len(), 2);
+    assert_eq!(layers[0].name, "buildings");
+    assert_eq!(layers[0].feature_count, 1);
+    assert_eq!(layers[0].property_key_count, 1);
+    assert_eq!(layers[0].extent, 4096);
+    assert_eq!(layers[0].version, 2);
+    assert_eq!(layers[1].name, "roads");
+    assert_eq!(layers[1].feature_count, 1);
+    assert_eq!(layers[1].property_key_count, 2);
+    assert_eq!(layers[1].extent, 4096);
+    assert_eq!(layers[1].version, 2);
 }

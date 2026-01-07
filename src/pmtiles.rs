@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use brotli::Decompressor;
 use flate2::read::GzDecoder;
 use hilbert_2d::{h2xy_discrete, xy2h_discrete, Variant};
+use mvt_reader::Reader;
 use rusqlite::Connection;
 use serde_json::Value;
 use varint_rs::{VarintReader, VarintWriter};
@@ -61,6 +62,13 @@ struct StatAccum {
     tile_count: u64,
     total_bytes: u64,
     max_bytes: u64,
+}
+
+struct LayerAccum {
+    feature_count: u64,
+    property_keys: HashSet<String>,
+    extent: u32,
+    version: u32,
 }
 
 impl StatAccum {
@@ -132,6 +140,32 @@ fn tile_id_to_xyz(tile_id: u64) -> (u8, u32, u32) {
 
 fn pow4(z: u8) -> u64 {
     1u64 << (2 * (z as u64))
+}
+
+fn include_sample(index: u64, total: u64, sample: Option<&crate::mbtiles::SampleSpec>) -> bool {
+    match sample {
+        None => true,
+        Some(crate::mbtiles::SampleSpec::Count(count)) => index <= *count,
+        Some(crate::mbtiles::SampleSpec::Ratio(ratio)) => {
+            if *ratio >= 1.0 {
+                return true;
+            }
+            if *ratio <= 0.0 {
+                return false;
+            }
+            let threshold = (ratio * u64::MAX as f64) as u64;
+            let hash = splitmix64(index ^ total);
+            hash <= threshold
+        }
+    }
+}
+
+fn splitmix64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9e3779b97f4a7c15);
+    let mut z = x;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+    z ^ (z >> 31)
 }
 
 fn encode_directory(entries: &[Entry]) -> Result<Vec<u8>> {
@@ -437,6 +471,30 @@ fn decode_internal_bytes(data: Vec<u8>, internal_compression: u8) -> Result<Vec<
             Ok(decoded)
         }
         other => anyhow::bail!("unsupported PMTiles metadata compression: {other}"),
+    }
+}
+
+fn decode_tile_payload_pmtiles(data: &[u8], tile_compression: u8) -> Result<Vec<u8>> {
+    if data.starts_with(&[0x1f, 0x8b]) {
+        let mut decoder = GzDecoder::new(data);
+        let mut decoded = Vec::new();
+        decoder
+            .read_to_end(&mut decoded)
+            .context("decode gzip tile data")?;
+        return Ok(decoded);
+    }
+    match tile_compression {
+        0 => Ok(data.to_vec()),
+        1 => Ok(data.to_vec()),
+        2 => {
+            let mut decoder = Decompressor::new(data, 4096);
+            let mut decoded = Vec::new();
+            decoder
+                .read_to_end(&mut decoded)
+                .context("decode brotli tile data")?;
+            Ok(decoded)
+        }
+        other => anyhow::bail!("unsupported PMTiles tile compression: {other}"),
     }
 }
 
@@ -788,6 +846,98 @@ fn build_zoom_histograms_from_entries(
     Ok(result)
 }
 
+fn build_file_layer_list_pmtiles(
+    mut file: &File,
+    header: &Header,
+    entries: &[Entry],
+    options: &InspectOptions,
+    total_tiles: u64,
+) -> Result<Vec<crate::mbtiles::FileLayerSummary>> {
+    if !options.include_layer_list {
+        return Ok(Vec::new());
+    }
+
+    let mut map: BTreeMap<String, LayerAccum> = BTreeMap::new();
+    let mut index: u64 = 0;
+    let mut stack = vec![entries.to_vec()];
+
+    while let Some(entries) = stack.pop() {
+        for entry in entries.iter() {
+            if entry.run_length == 0 {
+                if entry.length == 0 {
+                    continue;
+                }
+                let leaf_offset = header.leaf_offset + entry.offset;
+                let leaf_entries =
+                    read_directory_section(file, header, leaf_offset, entry.length as u64)?;
+                stack.push(leaf_entries);
+                continue;
+            }
+            let run = entry.run_length.max(1);
+            let mut selected = 0u64;
+            for idx in 0..run {
+                let tile_id = entry.tile_id + idx as u64;
+                let (z, _x, _y) = tile_id_to_xyz(tile_id);
+                if let Some(target_zoom) = options.zoom {
+                    if z != target_zoom {
+                        continue;
+                    }
+                }
+                index += 1;
+                if include_sample(index, total_tiles, options.sample.as_ref()) {
+                    selected += 1;
+                }
+            }
+            if selected == 0 {
+                continue;
+            }
+            let data_offset = header.data_offset + entry.offset;
+            let mut data = vec![0u8; entry.length as usize];
+            file.seek(SeekFrom::Start(data_offset))
+                .context("seek tile data")?;
+            file.read_exact(&mut data).context("read tile data")?;
+            let payload = decode_tile_payload_pmtiles(&data, header.tile_compression)?;
+            let reader = Reader::new(payload)
+                .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+            let layers = reader
+                .get_layer_metadata()
+                .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
+            for layer in layers {
+                let entry = map.entry(layer.name.clone()).or_insert_with(|| LayerAccum {
+                    feature_count: 0,
+                    property_keys: HashSet::new(),
+                    extent: layer.extent,
+                    version: layer.version,
+                });
+                entry.feature_count += (layer.feature_count as u64) * selected;
+                let features = reader
+                    .get_features(layer.layer_index)
+                    .map_err(|err| anyhow::anyhow!("read layer features: {err}"))?;
+                for feature in features {
+                    if let Some(props) = feature.properties {
+                        for key in props.keys() {
+                            entry.property_keys.insert(key.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut result = map
+        .into_iter()
+        .map(|(name, accum)| crate::mbtiles::FileLayerSummary {
+            name,
+            feature_count: accum.feature_count,
+            property_key_count: accum.property_keys.len(),
+            extent: accum.extent,
+            version: accum.version,
+        })
+        .collect::<Vec<_>>();
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(result)
+}
+
 pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Result<MbtilesReport> {
     ensure_pmtiles_path(path)?;
     let file = File::open(path)
@@ -845,6 +995,13 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
         options.histogram_buckets,
         options.max_tile_bytes,
     )?;
+    let file_layers = build_file_layer_list_pmtiles(
+        &file,
+        &header,
+        &root_entries,
+        options,
+        overall.tile_count,
+    )?;
 
     let by_zoom = by_zoom
         .into_iter()
@@ -872,7 +1029,7 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
         sample_used_tiles: 0,
         histogram,
         histograms_by_zoom,
-        file_layers: Vec::new(),
+        file_layers,
         top_tiles: Vec::new(),
         bucket_count: None,
         bucket_tiles: Vec::new(),
