@@ -313,6 +313,32 @@ v0.0.4 では以下を **含めない**。
 
 ---
 
+## 1.33 マイルストーン（v0.0.31）
+
+* `inspect` が `.pmtiles` 入力を受け付ける（入力判定/CLI で拒否しない）
+* PMTiles のメタデータ取得（name/minzoom/maxzoom/format など）
+
+---
+
+## 1.34 マイルストーン（v0.0.32）
+
+* PMTiles のタイル列挙により tiles count / zoom 別集計を出力
+
+---
+
+## 1.35 マイルストーン（v0.0.33）
+
+* PMTiles のサイズ統計（max/avg/total）を `inspect` に反映
+* `--max-tile-bytes` による警告判定（PMTiles）
+
+---
+
+## 1.36 マイルストーン（v0.0.34）
+
+* PMTiles の layer 解析（text 出力の Layers セクション相当）
+
+---
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）
