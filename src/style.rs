@@ -171,13 +171,20 @@ impl FilterValue {
 }
 
 #[derive(Debug, Clone)]
+enum FilterKey {
+    Property(String),
+    Type,
+    Zoom,
+}
+
+#[derive(Debug, Clone)]
 enum Filter {
-    Eq(String, FilterValue),
-    Neq(String, FilterValue),
-    In(String, Vec<FilterValue>),
-    NotIn(String, Vec<FilterValue>),
-    Has(String),
-    NotHas(String),
+    Eq(FilterKey, FilterValue),
+    Neq(FilterKey, FilterValue),
+    In(FilterKey, Vec<FilterValue>),
+    NotIn(FilterKey, Vec<FilterValue>),
+    Has(FilterKey),
+    NotHas(FilterKey),
     All(Vec<Filter>),
     Any(Vec<Filter>),
     None(Vec<Filter>),
@@ -188,24 +195,24 @@ enum Filter {
 impl Filter {
     fn evaluate(&self, feature: &mvt_reader::feature::Feature, zoom: u8) -> FilterResult {
         match self {
-            Filter::Eq(key, value) => match feature_value(feature, key, zoom) {
+            Filter::Eq(key, value) => match feature_value_by_key(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(actual.equals(value)),
                 None => FilterResult::Unknown,
             },
-            Filter::Neq(key, value) => match feature_value(feature, key, zoom) {
+            Filter::Neq(key, value) => match feature_value_by_key(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(!actual.equals(value)),
                 None => FilterResult::Unknown,
             },
-            Filter::In(key, values) => match feature_value(feature, key, zoom) {
+            Filter::In(key, values) => match feature_value_by_key(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(values.iter().any(|v| actual.equals(v))),
                 None => FilterResult::Unknown,
             },
-            Filter::NotIn(key, values) => match feature_value(feature, key, zoom) {
+            Filter::NotIn(key, values) => match feature_value_by_key(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(!values.iter().any(|v| actual.equals(v))),
                 None => FilterResult::Unknown,
             },
-            Filter::Has(key) => FilterResult::from_bool(feature_has(feature, key)),
-            Filter::NotHas(key) => FilterResult::from_bool(!feature_has(feature, key)),
+            Filter::Has(key) => FilterResult::from_bool(feature_has_key(feature, key)),
+            Filter::NotHas(key) => FilterResult::from_bool(!feature_has_key(feature, key)),
             Filter::All(filters) => {
                 let mut saw_unknown = false;
                 for filter in filters {
@@ -271,39 +278,39 @@ impl FilterResult {
     }
 }
 
-fn feature_has(feature: &mvt_reader::feature::Feature, key: &str) -> bool {
-    if key == "$type" || key == "zoom" {
-        return true;
+fn feature_has_key(feature: &mvt_reader::feature::Feature, key: &FilterKey) -> bool {
+    match key {
+        FilterKey::Type | FilterKey::Zoom => true,
+        FilterKey::Property(name) => feature
+            .properties
+            .as_ref()
+            .map(|props| props.contains_key(name))
+            .unwrap_or(false),
     }
-    feature
-        .properties
-        .as_ref()
-        .map(|props| props.contains_key(key))
-        .unwrap_or(false)
 }
 
-fn feature_value(
+fn feature_value_by_key(
     feature: &mvt_reader::feature::Feature,
-    key: &str,
+    key: &FilterKey,
     zoom: u8,
 ) -> Option<FilterValue> {
-    if key == "$type" {
-        return Some(FilterValue::String(feature_type(feature).to_string()));
-    }
-    if key == "zoom" {
-        return Some(FilterValue::Number(zoom as f64));
-    }
-    let props = feature.properties.as_ref()?;
-    let value = props.get(key)?;
-    match value {
-        mvt_reader::feature::Value::String(text) => Some(FilterValue::String(text.clone())),
-        mvt_reader::feature::Value::Float(val) => Some(FilterValue::Number(*val as f64)),
-        mvt_reader::feature::Value::Double(val) => Some(FilterValue::Number(*val)),
-        mvt_reader::feature::Value::Int(val) => Some(FilterValue::Number(*val as f64)),
-        mvt_reader::feature::Value::UInt(val) => Some(FilterValue::Number(*val as f64)),
-        mvt_reader::feature::Value::SInt(val) => Some(FilterValue::Number(*val as f64)),
-        mvt_reader::feature::Value::Bool(val) => Some(FilterValue::Bool(*val)),
-        mvt_reader::feature::Value::Null => None,
+    match key {
+        FilterKey::Type => Some(FilterValue::String(feature_type(feature).to_string())),
+        FilterKey::Zoom => Some(FilterValue::Number(zoom as f64)),
+        FilterKey::Property(name) => {
+            let props = feature.properties.as_ref()?;
+            let value = props.get(name)?;
+            match value {
+                mvt_reader::feature::Value::String(text) => Some(FilterValue::String(text.clone())),
+                mvt_reader::feature::Value::Float(val) => Some(FilterValue::Number(*val as f64)),
+                mvt_reader::feature::Value::Double(val) => Some(FilterValue::Number(*val)),
+                mvt_reader::feature::Value::Int(val) => Some(FilterValue::Number(*val as f64)),
+                mvt_reader::feature::Value::UInt(val) => Some(FilterValue::Number(*val as f64)),
+                mvt_reader::feature::Value::SInt(val) => Some(FilterValue::Number(*val as f64)),
+                mvt_reader::feature::Value::Bool(val) => Some(FilterValue::Bool(*val)),
+                mvt_reader::feature::Value::Null => None,
+            }
+        }
     }
 }
 
@@ -360,7 +367,7 @@ fn parse_filter(value: &Value) -> Option<Filter> {
             if array.len() < 3 {
                 return Some(Filter::Unknown);
             }
-            let key = array[1].as_str()?.to_string();
+            let key = parse_filter_key(&array[1])?;
             let value = parse_filter_value(&array[2])?;
             if op == "==" {
                 Some(Filter::Eq(key, value))
@@ -372,7 +379,7 @@ fn parse_filter(value: &Value) -> Option<Filter> {
             if array.len() < 3 {
                 return Some(Filter::Unknown);
             }
-            let key = array[1].as_str()?.to_string();
+            let key = parse_filter_key(&array[1])?;
             let mut values = Vec::new();
             if let Some(list) = array[2].as_array() {
                 for item in list {
@@ -401,7 +408,7 @@ fn parse_filter(value: &Value) -> Option<Filter> {
             if array.len() < 2 {
                 return Some(Filter::Unknown);
             }
-            let key = array[1].as_str()?.to_string();
+            let key = parse_filter_key(&array[1])?;
             if op == "has" {
                 Some(Filter::Has(key))
             } else {
@@ -438,6 +445,30 @@ fn parse_filter_value(value: &Value) -> Option<FilterValue> {
         return Some(FilterValue::Bool(boolean));
     }
     None
+}
+
+fn parse_filter_key(value: &Value) -> Option<FilterKey> {
+    if let Some(name) = value.as_str() {
+        return Some(match name {
+            "$type" | "geometry-type" => FilterKey::Type,
+            "zoom" => FilterKey::Zoom,
+            _ => FilterKey::Property(name.to_string()),
+        });
+    }
+    let array = value.as_array()?;
+    if array.is_empty() {
+        return None;
+    }
+    let op = array[0].as_str()?;
+    match op {
+        "get" => {
+            let key = array.get(1)?.as_str()?;
+            Some(FilterKey::Property(key.to_string()))
+        }
+        "zoom" => Some(FilterKey::Zoom),
+        "geometry-type" => Some(FilterKey::Type),
+        _ => None,
+    }
 }
 
 pub fn read_style(path: &Path) -> Result<MapboxStyle> {
