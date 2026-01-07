@@ -151,7 +151,7 @@ fn main() -> Result<()> {
                             .unwrap_or(0)
                             .max("avg".len());
                         println!(
-                            "{} {} {} {} {} {} {}",
+                            "  {} {} {} {} {} {} {}",
                             pad_right("range", 17),
                             pad_left("count", count_width),
                             pad_left("bytes", bytes_width),
@@ -174,7 +174,7 @@ fn main() -> Result<()> {
                                 format_bytes(bucket.max_bytes)
                             );
                             println!(
-                                "{} {} {} {} {:>7.2}% {:>7.2}% {:>9.2}% {}",
+                                "  {} {} {} {} {:>7.2}% {:>7.2}% {:>9.2}% {}",
                                 pad_right(&range, 17),
                                 pad_left(&bucket.count.to_string(), count_width),
                                 pad_left(&format_bytes(bucket.total_bytes), bytes_width),
@@ -214,7 +214,7 @@ fn main() -> Result<()> {
                             .len()
                             .max("keys".len());
                         println!(
-                            "{} {} {} {} {}",
+                            "  {} {} {} {} {}",
                             pad_right("name", name_width),
                             pad_left("features", features_width),
                             pad_left("keys", keys_width),
@@ -223,7 +223,7 @@ fn main() -> Result<()> {
                         );
                         for layer in report.file_layers.iter() {
                             println!(
-                                "{} {} {} {} {}",
+                                "  {} {} {} {} {}",
                                 pad_right(&layer.name, name_width),
                                 pad_left(&layer.feature_count.to_string(), features_width),
                                 pad_left(&layer.property_key_count.to_string(), keys_width),
