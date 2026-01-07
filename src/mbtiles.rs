@@ -128,7 +128,7 @@ fn build_histogram(
     let conn = open_readonly_mbtiles(path)?;
     apply_read_pragmas(&conn)?;
     let mut stmt = conn
-        .prepare("SELECT LENGTH(tile_data) FROM tiles ORDER BY rowid")
+        .prepare("SELECT LENGTH(tile_data) FROM tiles")
         .context("prepare histogram scan")?;
     let mut rows = stmt.query([]).context("query histogram scan")?;
 
@@ -229,7 +229,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     };
 
     let mut stmt = conn
-        .prepare("SELECT zoom_level, tile_column, tile_row, LENGTH(tile_data) FROM tiles ORDER BY rowid")
+        .prepare("SELECT zoom_level, tile_column, tile_row, LENGTH(tile_data) FROM tiles")
         .context("prepare tiles scan")?;
     let mut rows = stmt.query([]).context("query tiles scan")?;
 
