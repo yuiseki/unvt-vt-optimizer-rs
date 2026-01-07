@@ -263,7 +263,7 @@ pub fn format_metadata_section(metadata: &BTreeMap<String, String>) -> Vec<Strin
     let mut lines = Vec::with_capacity(metadata.len() + 1);
     lines.push("## Metadata".to_string());
     for (name, value) in metadata.iter() {
-        if name == "json" {
+        if name == "json" || name == "vector_layers" {
             continue;
         }
         lines.push(format!("- {}: {}", name, value));
