@@ -418,24 +418,28 @@ fn emphasize_table_header(line: &str) -> String {
     }
 }
 fn print_prune_summary(stats: &PruneStats) {
-    println!("Prune results");
+    println!("Summary");
     if stats.removed_features_by_zoom.is_empty() {
         println!("- Removed features: none");
     } else {
+        let total_removed: u64 = stats.removed_features_by_zoom.values().sum();
+        println!("- Removed features total: {}", total_removed);
+        println!("- Removed features by zoom:");
         for (zoom, count) in stats.removed_features_by_zoom.iter() {
-            println!("- Removed {} features in zoom {}", count, zoom);
+            println!("  z{:02}: {}", zoom, count);
         }
     }
     if stats.removed_layers_by_zoom.is_empty() {
         println!("- Removed layers: none");
     } else {
+        println!("- Removed layers:");
         for (layer, zooms) in stats.removed_layers_by_zoom.iter() {
             let zoom_list = zooms
                 .iter()
                 .map(|z| z.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            println!("- Removed layer {} from zoom levels {}", layer, zoom_list);
+            println!("  {} @ z{}", layer, zoom_list);
         }
     }
     if stats.unknown_filters > 0 {
@@ -443,8 +447,9 @@ fn print_prune_summary(stats: &PruneStats) {
             "- Unknown filter expressions kept: {}",
             stats.unknown_filters
         );
+        println!("- Unknown filter expressions by layer:");
         for (layer, count) in stats.unknown_filters_by_layer.iter() {
-            println!("- Unknown filter expressions in layer {}: {}", layer, count);
+            println!("  {}: {}", layer, count);
         }
     }
 }
