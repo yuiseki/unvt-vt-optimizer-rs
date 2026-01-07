@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 
 use tile_prune::cli::{Cli, Command, StyleMode};
 use tile_prune::cli::ReportFormat;
@@ -157,4 +157,21 @@ fn parse_inspect_output_ndjson() {
         }
         _ => panic!("expected inspect command"),
     }
+}
+
+#[test]
+fn inspect_help_describes_fields() {
+    let mut cmd = Cli::command();
+    let inspect = cmd
+        .find_subcommand_mut("inspect")
+        .expect("inspect command");
+    let mut buffer = Vec::new();
+    inspect.write_long_help(&mut buffer).expect("help");
+    let help = String::from_utf8(buffer).expect("utf8");
+
+    assert!(help.contains("Sampling strategy"));
+    assert!(help.contains("Output format"));
+    assert!(help.contains("Fast defaults"));
+    assert!(help.contains("Histogram bucket index"));
+    assert!(help.contains("NDJSON"));
 }

@@ -24,59 +24,78 @@ pub enum Command {
 
 #[derive(Debug, Args)]
 pub struct InspectArgs {
+    /// Path to an MBTiles file to inspect.
     pub input: PathBuf,
 
+    /// Threshold in bytes for size warnings in histogram averages.
     #[arg(long, default_value_t = 1_280_000)]
     pub max_tile_bytes: u64,
 
+    /// Number of buckets for the size histogram (0 disables histogram output).
     #[arg(long, default_value_t = 10)]
     pub histogram_buckets: u32,
 
+    /// Report the N largest tiles from the sampled set.
     #[arg(long)]
     pub topn: Option<u32>,
 
+    /// Sampling strategy: ratio (e.g. 0.1) or count (e.g. 1000).
     #[arg(long)]
     pub sample: Option<String>,
 
+    /// Output format (text/json/ndjson).
     #[arg(long, value_enum, default_value_t = ReportFormat::Text)]
     pub output: ReportFormat,
 
+    /// Disable the progress bar.
     #[arg(long, default_value_t = false)]
     pub no_progress: bool,
 
+    /// Limit inspection to a specific zoom level.
     #[arg(long)]
     pub zoom: Option<u8>,
 
+    /// Histogram bucket index (0-based) used with --list-tiles.
     #[arg(long)]
     pub bucket: Option<usize>,
 
+    /// Target tile in z/x/y form (requires --summary).
     #[arg(long)]
     pub tile: Option<String>,
 
+    /// Emit a tile summary (requires --tile).
     #[arg(long, default_value_t = false)]
     pub summary: bool,
 
+    /// Filter tile summary to a specific layer (requires --summary).
     #[arg(long)]
     pub layer: Option<String>,
 
+    /// Recommend histogram buckets over/near the size threshold (requires --zoom).
     #[arg(long, default_value_t = false)]
     pub recommend: bool,
 
+    /// Fast defaults: sample=0.1, topn=5, histogram-buckets=10.
     #[arg(long, default_value_t = false)]
     pub fast: bool,
 
+    /// List tiles in the selected bucket (requires --bucket).
     #[arg(long, default_value_t = false)]
     pub list_tiles: bool,
 
+    /// Limit the number of tiles listed per bucket.
     #[arg(long, default_value_t = 100)]
     pub limit: usize,
 
+    /// Sort order for listed tiles.
     #[arg(long, value_enum, default_value_t = TileSortArg::Size)]
     pub sort: TileSortArg,
 
+    /// NDJSON: omit the summary line (requires --output ndjson).
     #[arg(long, default_value_t = false)]
     pub ndjson_lite: bool,
 
+    /// NDJSON: compact payloads and force --output ndjson.
     #[arg(long, default_value_t = false)]
     pub ndjson_compact: bool,
 }
