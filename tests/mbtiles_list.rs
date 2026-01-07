@@ -55,6 +55,7 @@ fn list_tiles_sorted_by_size_with_limit() {
         bucket: Some(0),
         tile: None,
         summary: false,
+        layer: None,
         list_tiles: Some(TileListOptions {
             limit: 2,
             sort: TileSort::Size,
@@ -82,6 +83,7 @@ fn list_tiles_sorted_by_zxy() {
         bucket: Some(1),
         tile: None,
         summary: false,
+        layer: None,
         list_tiles: Some(TileListOptions {
             limit: 10,
             sort: TileSort::Zxy,

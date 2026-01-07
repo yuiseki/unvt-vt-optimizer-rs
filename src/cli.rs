@@ -56,6 +56,9 @@ pub struct InspectArgs {
     #[arg(long, default_value_t = false)]
     pub summary: bool,
 
+    #[arg(long)]
+    pub layer: Option<String>,
+
     #[arg(long, default_value_t = false)]
     pub list_tiles: bool,
 

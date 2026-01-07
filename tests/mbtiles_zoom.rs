@@ -59,6 +59,7 @@ fn inspect_zoom_limits_stats_and_histogram() {
         bucket: Some(0),
         tile: None,
         summary: false,
+        layer: None,
         list_tiles: None,
     };
 

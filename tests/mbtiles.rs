@@ -142,6 +142,7 @@ fn inspect_mbtiles_topn_and_histogram() {
         bucket: None,
         tile: None,
         summary: false,
+        layer: None,
         list_tiles: None,
     };
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");
@@ -166,6 +167,7 @@ fn inspect_mbtiles_sample_count() {
         bucket: None,
         tile: None,
         summary: false,
+        layer: None,
         list_tiles: None,
     };
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");

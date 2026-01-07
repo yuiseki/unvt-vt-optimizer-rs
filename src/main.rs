@@ -29,6 +29,9 @@ fn main() -> Result<()> {
             if tile.is_some() && !args.summary {
                 anyhow::bail!("--tile requires --summary");
             }
+            if args.layer.is_some() && !args.summary {
+                anyhow::bail!("--layer requires --summary");
+            }
             let options = InspectOptions {
                 sample,
                 topn: args.topn.unwrap_or(0) as usize,
@@ -38,6 +41,7 @@ fn main() -> Result<()> {
                 bucket: args.bucket,
                 tile,
                 summary: args.summary,
+                layer: args.layer.clone(),
                 list_tiles: if args.list_tiles {
                     Some(TileListOptions {
                         limit: args.limit,
@@ -115,9 +119,15 @@ fn main() -> Result<()> {
                         }
                     }
                     if let Some(summary) = report.tile_summary.as_ref() {
-                        println!("tile_summary: z={} x={} y={}", summary.zoom, summary.x, summary.y);
+                        println!(
+                            "tile_summary: z={} x={} y={} total_features={}",
+                            summary.zoom, summary.x, summary.y, summary.total_features
+                        );
                         for layer in summary.layers.iter() {
-                            println!("layer: {} features={}", layer.name, layer.feature_count);
+                            println!(
+                                "layer: {} features={} property_keys={}",
+                                layer.name, layer.feature_count, layer.property_key_count
+                            );
                         }
                     }
                 }

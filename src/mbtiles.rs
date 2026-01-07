@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::{BTreeMap, BinaryHeap};
+use std::collections::{BTreeMap, BinaryHeap, HashSet};
 use std::path::Path;
 use std::io::Read;
 
@@ -59,6 +59,7 @@ pub struct TopTile {
 pub struct LayerSummary {
     pub name: String,
     pub feature_count: usize,
+    pub property_key_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -66,6 +67,7 @@ pub struct TileSummary {
     pub zoom: u8,
     pub x: u32,
     pub y: u32,
+    pub total_features: usize,
     pub layers: Vec<LayerSummary>,
 }
 
@@ -92,6 +94,7 @@ pub struct InspectOptions {
     pub bucket: Option<usize>,
     pub tile: Option<TileCoord>,
     pub summary: bool,
+    pub layer: Option<String>,
     pub list_tiles: Option<TileListOptions>,
 }
 
@@ -106,6 +109,7 @@ impl Default for InspectOptions {
             bucket: None,
             tile: None,
             summary: false,
+            layer: None,
             list_tiles: None,
         }
     }
@@ -352,18 +356,39 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         let layers = reader
             .get_layer_metadata()
             .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
-        let layers = layers
-            .into_iter()
-            .map(|layer| LayerSummary {
+        let mut total_features = 0usize;
+        let mut summaries = Vec::new();
+        for layer in layers {
+            if let Some(filter) = options.layer.as_deref() {
+                if layer.name != filter {
+                    continue;
+                }
+            }
+            let features = reader
+                .get_features(layer.layer_index)
+                .map_err(|err| anyhow::anyhow!("read layer features: {err}"))?;
+            let mut keys = HashSet::new();
+            for feature in features {
+                if let Some(props) = feature.properties {
+                    for key in props.keys() {
+                        keys.insert(key.clone());
+                    }
+                }
+            }
+            let feature_count = layer.feature_count;
+            total_features += feature_count;
+            summaries.push(LayerSummary {
                 name: layer.name,
-                feature_count: layer.feature_count,
-            })
-            .collect::<Vec<_>>();
+                feature_count,
+                property_key_count: keys.len(),
+            });
+        }
         Some(TileSummary {
             zoom: coord.zoom,
             x: coord.x,
             y: coord.y,
-            layers,
+            total_features,
+            layers: summaries,
         })
     } else {
         None

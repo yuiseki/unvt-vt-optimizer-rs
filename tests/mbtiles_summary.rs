@@ -15,13 +15,18 @@ fn create_vector_tile() -> Vec<u8> {
         .expect("point")
         .encode()
         .expect("encode");
-    let layer = layer.into_feature(geom).into_layer();
+    let mut feature = layer.into_feature(geom);
+    feature.add_tag_string("class", "primary");
+    feature.add_tag_string("name", "Main");
+    let layer = feature.into_layer();
     let geom = GeomEncoder::new(GeomType::Point)
         .point(3.0, 4.0)
         .expect("point")
         .encode()
         .expect("encode");
-    let layer = layer.into_feature(geom).into_layer();
+    let mut feature = layer.into_feature(geom);
+    feature.add_tag_string("name", "Side");
+    let layer = feature.into_layer();
     tile.add_layer(layer).expect("add roads layer");
 
     let layer = tile.create_layer("buildings");
@@ -30,7 +35,9 @@ fn create_vector_tile() -> Vec<u8> {
         .expect("point")
         .encode()
         .expect("encode");
-    let layer = layer.into_feature(geom).into_layer();
+    let mut feature = layer.into_feature(geom);
+    feature.add_tag_string("height", "10");
+    let layer = feature.into_layer();
     tile.add_layer(layer).expect("add buildings layer");
 
     tile.to_bytes().expect("tile bytes")
@@ -74,6 +81,7 @@ fn inspect_tile_summary_reports_layer_counts() {
         bucket: None,
         tile: Some(TileCoord { zoom: 3, x: 4, y: 5 }),
         summary: true,
+        layer: None,
         list_tiles: None,
     };
 
@@ -82,11 +90,14 @@ fn inspect_tile_summary_reports_layer_counts() {
     assert_eq!(summary.zoom, 3);
     assert_eq!(summary.x, 4);
     assert_eq!(summary.y, 5);
+    assert_eq!(summary.total_features, 3);
     assert_eq!(summary.layers.len(), 2);
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[0].feature_count, 2);
+    assert_eq!(summary.layers[0].property_key_count, 2);
     assert_eq!(summary.layers[1].name, "buildings");
     assert_eq!(summary.layers[1].feature_count, 1);
+    assert_eq!(summary.layers[1].property_key_count, 1);
 }
 
 #[test]
@@ -108,6 +119,7 @@ fn inspect_tile_summary_decodes_gzip_tiles() {
         bucket: None,
         tile: Some(TileCoord { zoom: 3, x: 4, y: 5 }),
         summary: true,
+        layer: None,
         list_tiles: None,
     };
 
@@ -115,4 +127,32 @@ fn inspect_tile_summary_decodes_gzip_tiles() {
     let summary = report.tile_summary.expect("summary");
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[1].name, "buildings");
+}
+
+#[test]
+fn inspect_tile_summary_filters_layer() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("input.mbtiles");
+    let data = create_vector_tile();
+    create_summary_mbtiles(&path, data);
+
+    let options = InspectOptions {
+        sample: None,
+        topn: 0,
+        histogram_buckets: 0,
+        no_progress: true,
+        zoom: None,
+        bucket: None,
+        tile: Some(TileCoord { zoom: 3, x: 4, y: 5 }),
+        summary: true,
+        layer: Some("roads".to_string()),
+        list_tiles: None,
+    };
+
+    let report = inspect_mbtiles_with_options(&path, options).expect("inspect");
+    let summary = report.tile_summary.expect("summary");
+    assert_eq!(summary.total_features, 2);
+    assert_eq!(summary.layers.len(), 1);
+    assert_eq!(summary.layers[0].name, "roads");
+    assert_eq!(summary.layers[0].property_key_count, 2);
 }
