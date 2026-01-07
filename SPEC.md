@@ -371,6 +371,39 @@ v0.0.4 では以下を **含めない**。
   * `$type` の `Point|LineString|Polygon` 判定をサポート
   * 未対応式は UNKNOWN として keep（安全側）
 
+---
+
+## 1.41 マイルストーン（v0.0.39）
+
+* filter と zoom の結合
+  * `["zoom"]` 参照がある場合のみ評価（整数 zoom）
+  * minzoom/maxzoom と整合（可視 layer のみ filter を評価）
+
+---
+
+## 1.42 マイルストーン（v0.0.40）
+
+* filter の結合ルールを明確化
+  * 同一 source-layer 複数 style layer は OR で keep
+  * `layout.visibility: "none"` は常に drop
+  * paint が非表示なら filter を飛ばして drop
+
+---
+
+## 1.43 マイルストーン（v0.0.41）
+
+* 実タイル検証と guard
+  * osm-fiord.json で実サンプル検証
+  * UNKNOWN 式の集計ログを出力
+
+---
+
+## 1.44 マイルストーン（v0.0.42）
+
+* 追加の filter 記法
+  * legacy `["!", ...]` の扱い
+  * 未対応式の keep 方針は固定（UNKNOWN=keep）
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）

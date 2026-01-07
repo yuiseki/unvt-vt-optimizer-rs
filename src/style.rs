@@ -114,6 +114,7 @@ impl MapboxStyle {
         layer_name: &str,
         zoom: u8,
         feature: &mvt_reader::feature::Feature,
+        unknown_counter: &mut usize,
     ) -> FilterResult {
         let Some(layers) = self.layers_by_source_layer.get(layer_name) else {
             return FilterResult::False;
@@ -125,11 +126,14 @@ impl MapboxStyle {
             }
             let result = match layer.filter.as_ref() {
                 None => FilterResult::True,
-                Some(filter) => filter.evaluate(feature),
+                Some(filter) => filter.evaluate(feature, zoom),
             };
             match result {
                 FilterResult::True => return FilterResult::True,
-                FilterResult::Unknown => saw_unknown = true,
+                FilterResult::Unknown => {
+                    saw_unknown = true;
+                    *unknown_counter += 1;
+                }
                 FilterResult::False => {}
             }
         }
@@ -177,25 +181,26 @@ enum Filter {
     All(Vec<Filter>),
     Any(Vec<Filter>),
     None(Vec<Filter>),
+    Not(Box<Filter>),
     Unknown,
 }
 
 impl Filter {
-    fn evaluate(&self, feature: &mvt_reader::feature::Feature) -> FilterResult {
+    fn evaluate(&self, feature: &mvt_reader::feature::Feature, zoom: u8) -> FilterResult {
         match self {
-            Filter::Eq(key, value) => match feature_value(feature, key) {
+            Filter::Eq(key, value) => match feature_value(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(actual.equals(value)),
                 None => FilterResult::Unknown,
             },
-            Filter::Neq(key, value) => match feature_value(feature, key) {
+            Filter::Neq(key, value) => match feature_value(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(!actual.equals(value)),
                 None => FilterResult::Unknown,
             },
-            Filter::In(key, values) => match feature_value(feature, key) {
+            Filter::In(key, values) => match feature_value(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(values.iter().any(|v| actual.equals(v))),
                 None => FilterResult::Unknown,
             },
-            Filter::NotIn(key, values) => match feature_value(feature, key) {
+            Filter::NotIn(key, values) => match feature_value(feature, key, zoom) {
                 Some(actual) => FilterResult::from_bool(!values.iter().any(|v| actual.equals(v))),
                 None => FilterResult::Unknown,
             },
@@ -204,7 +209,7 @@ impl Filter {
             Filter::All(filters) => {
                 let mut saw_unknown = false;
                 for filter in filters {
-                    match filter.evaluate(feature) {
+                    match filter.evaluate(feature, zoom) {
                         FilterResult::True => {}
                         FilterResult::False => return FilterResult::False,
                         FilterResult::Unknown => saw_unknown = true,
@@ -219,7 +224,7 @@ impl Filter {
             Filter::Any(filters) => {
                 let mut saw_unknown = false;
                 for filter in filters {
-                    match filter.evaluate(feature) {
+                    match filter.evaluate(feature, zoom) {
                         FilterResult::True => return FilterResult::True,
                         FilterResult::False => {}
                         FilterResult::Unknown => saw_unknown = true,
@@ -234,7 +239,7 @@ impl Filter {
             Filter::None(filters) => {
                 let mut saw_unknown = false;
                 for filter in filters {
-                    match filter.evaluate(feature) {
+                    match filter.evaluate(feature, zoom) {
                         FilterResult::True => return FilterResult::False,
                         FilterResult::False => {}
                         FilterResult::Unknown => saw_unknown = true,
@@ -246,6 +251,11 @@ impl Filter {
                     FilterResult::True
                 }
             }
+            Filter::Not(filter) => match filter.evaluate(feature, zoom) {
+                FilterResult::True => FilterResult::False,
+                FilterResult::False => FilterResult::True,
+                FilterResult::Unknown => FilterResult::Unknown,
+            },
             Filter::Unknown => FilterResult::Unknown,
         }
     }
@@ -262,7 +272,7 @@ impl FilterResult {
 }
 
 fn feature_has(feature: &mvt_reader::feature::Feature, key: &str) -> bool {
-    if key == "$type" {
+    if key == "$type" || key == "zoom" {
         return true;
     }
     feature
@@ -272,9 +282,16 @@ fn feature_has(feature: &mvt_reader::feature::Feature, key: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn feature_value(feature: &mvt_reader::feature::Feature, key: &str) -> Option<FilterValue> {
+fn feature_value(
+    feature: &mvt_reader::feature::Feature,
+    key: &str,
+    zoom: u8,
+) -> Option<FilterValue> {
     if key == "$type" {
         return Some(FilterValue::String(feature_type(feature).to_string()));
+    }
+    if key == "zoom" {
+        return Some(FilterValue::Number(zoom as f64));
     }
     let props = feature.properties.as_ref()?;
     let value = props.get(key)?;
@@ -332,6 +349,13 @@ fn parse_filter(value: &Value) -> Option<Filter> {
     }
     let op = array[0].as_str()?;
     match op {
+        "!" => {
+            if array.len() < 2 {
+                return Some(Filter::Unknown);
+            }
+            let inner = parse_filter(&array[1]).unwrap_or(Filter::Unknown);
+            Some(Filter::Not(Box::new(inner)))
+        }
         "==" | "!=" => {
             if array.len() < 3 {
                 return Some(Filter::Unknown);

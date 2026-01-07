@@ -12,6 +12,7 @@ use geo_types::{Geometry, Line, LineString, MultiLineString, MultiPoint, MultiPo
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use mvt::{GeomData, GeomEncoder, GeomType, Tile};
 use mvt_reader::Reader;
+use tracing::warn;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
 
@@ -395,6 +396,7 @@ fn prune_tile_layers(
     style: &crate::style::MapboxStyle,
     keep_layers: &HashSet<String>,
     apply_filters: bool,
+    unknown_filters: &mut usize,
 ) -> Result<Vec<u8>> {
     let reader = Reader::new(payload.to_vec())
         .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
@@ -425,7 +427,7 @@ fn prune_tile_layers(
         let mut kept_features = 0u64;
         for feature in features {
             if apply_filters {
-                match style.should_keep_feature(&layer.name, zoom, &feature) {
+                match style.should_keep_feature(&layer.name, zoom, &feature, unknown_filters) {
                     crate::style::FilterResult::True => {}
                     crate::style::FilterResult::Unknown => {}
                     crate::style::FilterResult::False => {
@@ -1654,6 +1656,7 @@ pub fn prune_mbtiles_layer_only(
     let mut rows = stmt.query([]).context("query tiles")?;
 
     let keep_layers = style.source_layers();
+    let mut unknown_filters: usize = 0;
     while let Some(row) = rows.next().context("read tile row")? {
         let zoom: u8 = row.get(0)?;
         let x: u32 = row.get(1)?;
@@ -1662,7 +1665,14 @@ pub fn prune_mbtiles_layer_only(
 
         let is_gzip = data.starts_with(&[0x1f, 0x8b]);
         let payload = decode_tile_payload(&data)?;
-        let encoded = prune_tile_layers(&payload, zoom, style, &keep_layers, apply_filters)?;
+        let encoded = prune_tile_layers(
+            &payload,
+            zoom,
+            style,
+            &keep_layers,
+            apply_filters,
+            &mut unknown_filters,
+        )?;
         let tile_data = encode_tile_payload(&encoded, is_gzip)?;
 
         tx.execute(
@@ -1673,5 +1683,8 @@ pub fn prune_mbtiles_layer_only(
     }
 
     tx.commit().context("commit output")?;
+    if apply_filters && unknown_filters > 0 {
+        warn!(count = unknown_filters, "unknown filter expressions encountered");
+    }
     Ok(())
 }

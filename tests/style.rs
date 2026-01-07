@@ -51,3 +51,39 @@ fn style_filter_allows_type_checks() {
     let style = read_style(&style_path).expect("read style");
     assert!(style.is_layer_visible_on_zoom("water", 0));
 }
+
+#[test]
+fn style_filter_supports_zoom_reference() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let style_path = dir.path().join("style.json");
+    fs::write(
+        &style_path,
+        r#"{
+  "version": 8,
+  "sources": { "osm": { "type": "vector" } },
+  "layers": [
+    { "id": "roads", "type": "line", "source": "osm", "source-layer": "roads", "filter": ["==", "zoom", 3] }
+  ]
+}"#,
+    )
+    .expect("write style");
+
+    let style = read_style(&style_path).expect("read style");
+    assert!(style.is_layer_visible_on_zoom("roads", 3));
+    assert!(style.is_layer_visible_on_zoom("roads", 2));
+
+    let feature = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: None,
+    };
+    let mut unknown = 0usize;
+    assert_eq!(
+        style.should_keep_feature("roads", 3, &feature, &mut unknown),
+        tile_prune::style::FilterResult::True
+    );
+    assert_eq!(
+        style.should_keep_feature("roads", 2, &feature, &mut unknown),
+        tile_prune::style::FilterResult::False
+    );
+}
