@@ -84,6 +84,15 @@ fn main() -> Result<()> {
                     if let Some(count) = report.bucket_count {
                         println!("bucket_count: {}", count);
                     }
+                    if !report.bucket_tiles.is_empty() {
+                        println!("bucket_tiles:");
+                        for tile in report.bucket_tiles.iter() {
+                            println!(
+                                "z={}: x={} y={} bytes={}",
+                                tile.zoom, tile.x, tile.y, tile.bytes
+                            );
+                        }
+                    }
                     if !report.top_tiles.is_empty() {
                         println!("top_tiles:");
                         for tile in report.top_tiles.iter() {
