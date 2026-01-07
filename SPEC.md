@@ -114,6 +114,24 @@ v0.0.3 では以下を **含めない**。
 
 ---
 
+## 1.6 マイルストーン（v0.0.4）
+
+* `inspect` の実用化
+  * `--sample <ratio|count>` による高速化
+  * `--topn <k>` による最大タイル上位表示
+  * `--histogram-buckets <n>` によるサイズ分布
+  * `--output json` による JSON レポート
+  * 空タイル率（サイズ閾値ベース）の報告
+  * 進捗表示の有効化（`--no-progress` で無効化）
+
+v0.0.4 では以下を **含めない**。
+
+* style/filter の解釈
+* simplify 実装
+* sidecar / checkpoint / JSON レポートの詳細拡張
+
+---
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）
