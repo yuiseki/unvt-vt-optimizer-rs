@@ -3,4 +3,4 @@
 - When tests pass, always make a commit.
 - Work in small milestones.
 - Use TDD in small steps.
-- Tag the git repository when a milestone is achieved.
+- Tag the git repository when a milestone is achieved, after verifying on a real MBTiles sample.
