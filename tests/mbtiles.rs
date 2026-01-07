@@ -76,6 +76,7 @@ fn inspect_mbtiles_reports_minimal_stats() {
     assert_eq!(report.sample_used_tiles, 2);
     assert!(report.histogram.is_empty());
     assert!(report.histograms_by_zoom.is_empty());
+    assert!(report.file_layers.is_empty());
     assert!(report.top_tiles.is_empty());
 }
 
@@ -146,6 +147,7 @@ fn inspect_mbtiles_topn_and_histogram() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");
@@ -185,6 +187,7 @@ fn inspect_mbtiles_sample_count() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");

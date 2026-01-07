@@ -244,6 +244,36 @@ v0.0.4 では以下を **含めない**。
 
 ---
 
+## 1.23 マイルストーン（v0.0.21）
+
+* inspect text にファイル全体の layer list を追加（name / features / property key 数 / extent / version）
+
+---
+
+## 1.24 マイルストーン（v0.0.22）
+
+* `--tile --summary` の text 出力に property key 名の一覧を追加
+
+---
+
+## 1.25 マイルストーン（v0.0.23）
+
+* text 出力の単位整形（bytes → KB/MB）と桁揃え
+
+---
+
+## 1.26 マイルストーン（v0.0.24）
+
+* text 出力のセクション整理（Summary / Zoom / Histogram / Tiles / Layers）
+
+---
+
+## 1.27 マイルストーン（v0.0.25）
+
+* text 出力で警告を強調表示（near/over を記号で強調）
+
+---
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）

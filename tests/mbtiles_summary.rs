@@ -84,6 +84,7 @@ fn inspect_tile_summary_reports_layer_counts() {
         summary: true,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
 
@@ -124,6 +125,7 @@ fn inspect_tile_summary_decodes_gzip_tiles() {
         summary: true,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
 
@@ -152,6 +154,7 @@ fn inspect_tile_summary_filters_layer() {
         summary: true,
         layer: Some("roads".to_string()),
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
 

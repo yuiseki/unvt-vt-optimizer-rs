@@ -35,6 +35,7 @@ pub struct MbtilesReport {
     pub sample_used_tiles: u64,
     pub histogram: Vec<HistogramBucket>,
     pub histograms_by_zoom: Vec<ZoomHistogram>,
+    pub file_layers: Vec<FileLayerSummary>,
     pub top_tiles: Vec<TopTile>,
     pub bucket_count: Option<u64>,
     pub bucket_tiles: Vec<TopTile>,
@@ -80,6 +81,15 @@ pub struct LayerSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FileLayerSummary {
+    pub name: String,
+    pub feature_count: u64,
+    pub property_key_count: usize,
+    pub extent: u32,
+    pub version: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TileSummary {
     pub zoom: u8,
     pub x: u32,
@@ -114,6 +124,7 @@ pub struct InspectOptions {
     pub summary: bool,
     pub layer: Option<String>,
     pub recommend: bool,
+    pub include_layer_list: bool,
     pub list_tiles: Option<TileListOptions>,
 }
 
@@ -131,6 +142,7 @@ impl Default for InspectOptions {
             summary: false,
             layer: None,
             recommend: false,
+            include_layer_list: false,
             list_tiles: None,
         }
     }
@@ -220,6 +232,86 @@ fn decode_tile_payload(data: &[u8]) -> Result<Vec<u8>> {
     } else {
         Ok(data.to_vec())
     }
+}
+
+struct LayerAccum {
+    feature_count: u64,
+    property_keys: HashSet<String>,
+    extent: u32,
+    version: u32,
+}
+
+fn build_file_layer_list(
+    conn: &Connection,
+    sample: Option<&SampleSpec>,
+    total_tiles: u64,
+    zoom: Option<u8>,
+) -> Result<Vec<FileLayerSummary>> {
+    let mut stmt = conn
+        .prepare("SELECT zoom_level, tile_data FROM tiles")
+        .context("prepare layer list scan")?;
+    let mut rows = stmt.query([]).context("query layer list scan")?;
+
+    let mut index: u64 = 0;
+    let mut map: BTreeMap<String, LayerAccum> = BTreeMap::new();
+
+    while let Some(row) = rows.next().context("read layer list row")? {
+        let row_zoom: u8 = row.get(0)?;
+        if let Some(target) = zoom {
+            if row_zoom != target {
+                continue;
+            }
+        }
+        index += 1;
+        if !include_sample(index, total_tiles, sample) {
+            continue;
+        }
+        let data: Vec<u8> = row.get(1)?;
+        let payload = decode_tile_payload(&data)?;
+        let reader = Reader::new(payload)
+            .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+        let layers = reader
+            .get_layer_metadata()
+            .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
+        for layer in layers {
+            let entry = map.entry(layer.name.clone()).or_insert_with(|| LayerAccum {
+                feature_count: 0,
+                property_keys: HashSet::new(),
+                extent: layer.extent,
+                version: layer.version,
+            });
+            entry.feature_count += layer.feature_count as u64;
+            let features = reader
+                .get_features(layer.layer_index)
+                .map_err(|err| anyhow::anyhow!("read layer features: {err}"))?;
+            for feature in features {
+                if let Some(props) = feature.properties {
+                    for key in props.keys() {
+                        entry.property_keys.insert(key.clone());
+                    }
+                }
+            }
+        }
+
+        if let Some(SampleSpec::Count(limit)) = sample {
+            if index >= *limit {
+                break;
+            }
+        }
+    }
+
+    let mut result = map
+        .into_iter()
+        .map(|(name, accum)| FileLayerSummary {
+            name,
+            feature_count: accum.feature_count,
+            property_key_count: accum.property_keys.len(),
+            extent: accum.extent,
+            version: accum.version,
+        })
+        .collect::<Vec<_>>();
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(result)
 }
 
 fn build_tile_summary(
@@ -617,6 +709,15 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     let conn = open_readonly_mbtiles(path)?;
     apply_read_pragmas(&conn)?;
 
+    let total_tiles: u64 = match options.zoom {
+        Some(z) => conn
+            .query_row("SELECT COUNT(*) FROM tiles WHERE zoom_level = ?1", [z], |row| row.get(0))
+            .context("failed to read tile count (zoom)")?,
+        None => conn
+            .query_row("SELECT COUNT(*) FROM tiles", [], |row| row.get(0))
+            .context("failed to read tile count")?,
+    };
+
     let tile_summary = if options.summary {
         let coord = options
             .tile
@@ -626,13 +727,10 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         None
     };
 
-    let total_tiles: u64 = match options.zoom {
-        Some(z) => conn
-            .query_row("SELECT COUNT(*) FROM tiles WHERE zoom_level = ?1", [z], |row| row.get(0))
-            .context("failed to read tile count (zoom)")?,
-        None => conn
-            .query_row("SELECT COUNT(*) FROM tiles", [], |row| row.get(0))
-            .context("failed to read tile count")?,
+    let file_layers = if options.include_layer_list {
+        build_file_layer_list(&conn, options.sample.as_ref(), total_tiles, options.zoom)?
+    } else {
+        Vec::new()
     };
     let progress = if options.no_progress {
         ProgressBar::hidden()
@@ -898,6 +996,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         sample_used_tiles: used,
         histogram,
         histograms_by_zoom,
+        file_layers,
         top_tiles,
         bucket_count,
         bucket_tiles,

@@ -58,6 +58,7 @@ fn list_tiles_sorted_by_size_with_limit() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: Some(TileListOptions {
             limit: 2,
             sort: TileSort::Size,
@@ -88,6 +89,7 @@ fn list_tiles_sorted_by_zxy() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: Some(TileListOptions {
             limit: 10,
             sort: TileSort::Zxy,

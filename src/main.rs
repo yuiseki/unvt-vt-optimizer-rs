@@ -65,6 +65,7 @@ fn main() -> Result<()> {
                 summary: args.summary,
                 layer: args.layer.clone(),
                 recommend: args.recommend,
+                include_layer_list: output == ReportFormat::Text,
                 list_tiles: if args.list_tiles {
                     Some(TileListOptions {
                         limit: args.limit,
@@ -142,6 +143,19 @@ fn main() -> Result<()> {
                                 bucket.accum_pct_tiles,
                                 bucket.accum_pct_level_bytes,
                                 warn
+                            );
+                        }
+                    }
+                    if !report.file_layers.is_empty() {
+                        println!("layers:");
+                        for layer in report.file_layers.iter() {
+                            println!(
+                                "name={} features={} property_keys={} extent={} version={}",
+                                layer.name,
+                                layer.feature_count,
+                                layer.property_key_count,
+                                layer.extent,
+                                layer.version
                             );
                         }
                     }

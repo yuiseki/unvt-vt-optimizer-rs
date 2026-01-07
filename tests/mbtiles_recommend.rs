@@ -73,6 +73,7 @@ fn inspect_recommend_selects_over_limit_bucket_and_summaries() {
         summary: false,
         layer: None,
         recommend: true,
+        include_layer_list: false,
         list_tiles: None,
     };
 

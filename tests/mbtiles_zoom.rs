@@ -62,6 +62,7 @@ fn inspect_zoom_limits_stats_and_histogram() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
 
@@ -104,6 +105,7 @@ fn inspect_zoom_sampling_uses_zoom_tile_count() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
 
@@ -131,6 +133,7 @@ fn inspect_histograms_by_zoom_includes_each_zoom() {
         summary: false,
         layer: None,
         recommend: false,
+        include_layer_list: false,
         list_tiles: None,
     };
 
