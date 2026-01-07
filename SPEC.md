@@ -196,6 +196,54 @@ v0.0.4 では以下を **含めない**。
 
 ---
 
+## 1.15 マイルストーン（v0.0.13）
+
+* `--output ndjson` を追加（inspect の NDJSON 出力）
+
+---
+
+## 1.16 マイルストーン（v0.0.14）
+
+* NDJSON を分割出力（zoom ごとの histogram / summary を行単位に）
+
+---
+
+## 1.17 マイルストーン（v0.0.15）
+
+* NDJSON の tile 出力を1行1tileに分割（bucket/top）
+
+---
+
+## 1.18 マイルストーン（v0.0.16）
+
+* `--ndjson-lite` を追加（summary 行の省略）
+
+---
+
+## 1.19 マイルストーン（v0.0.17）
+
+* NDJSON の順序を安定化（zoom histogram / recommended buckets のソート）
+
+---
+
+## 1.20 マイルストーン（v0.0.18）
+
+* `--ndjson-compact` を追加（NDJSON の最小化）
+
+---
+
+## 1.21 マイルストーン（v0.0.19）
+
+* compact 時は summary を強制省略
+
+---
+
+## 1.22 マイルストーン（v0.0.20）
+
+* `--ndjson-compact` で `--output ndjson` を暗黙指定
+
+---
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）
