@@ -870,7 +870,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     }
 
     progress.set_position(processed);
-    progress.finish_and_clear();
+    progress.finish();
 
     let by_zoom = by_zoom
         .into_iter()
