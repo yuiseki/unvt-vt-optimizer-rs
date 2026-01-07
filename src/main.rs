@@ -32,10 +32,11 @@ fn main() -> Result<()> {
                 }
                 ReportFormat::Text => {
                     println!(
-                        "tiles: {} total_bytes: {} max_bytes: {}",
+                        "tiles: {} total_bytes: {} max_bytes: {} avg_bytes: {}",
                         report.overall.tile_count,
                         report.overall.total_bytes,
-                        report.overall.max_bytes
+                        report.overall.max_bytes,
+                        report.overall.avg_bytes
                     );
                     println!(
                         "empty_tiles: {} empty_ratio: {:.4}",
@@ -49,11 +50,12 @@ fn main() -> Result<()> {
                     }
                     for zoom in report.by_zoom.iter() {
                         println!(
-                            "z={}: tiles={} total_bytes={} max_bytes={}",
+                            "z={}: tiles={} total_bytes={} max_bytes={} avg_bytes={}",
                             zoom.zoom,
                             zoom.stats.tile_count,
                             zoom.stats.total_bytes,
-                            zoom.stats.max_bytes
+                            zoom.stats.max_bytes,
+                            zoom.stats.avg_bytes
                         );
                     }
                     if !report.histogram.is_empty() {
@@ -64,6 +66,9 @@ fn main() -> Result<()> {
                                 bucket.min_bytes, bucket.max_bytes, bucket.count
                             );
                         }
+                    }
+                    if let Some(count) = report.bucket_count {
+                        println!("bucket_count: {}", count);
                     }
                     if !report.top_tiles.is_empty() {
                         println!("top_tiles:");
