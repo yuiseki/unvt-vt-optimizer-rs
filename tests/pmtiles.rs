@@ -54,4 +54,5 @@ fn mbtiles_to_pmtiles_and_back_preserves_counts() {
     assert_eq!(report.overall.tile_count, 2);
     assert_eq!(report.overall.total_bytes, 30);
     assert_eq!(report.overall.max_bytes, 20);
+    assert_eq!(report.overall.avg_bytes, 15);
 }

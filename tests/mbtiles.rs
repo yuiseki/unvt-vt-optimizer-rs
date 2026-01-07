@@ -54,6 +54,7 @@ fn inspect_mbtiles_reports_minimal_stats() {
             tile_count: 2,
             total_bytes: 40,
             max_bytes: 30,
+            avg_bytes: 20,
         }
     );
     assert_eq!(
@@ -64,6 +65,7 @@ fn inspect_mbtiles_reports_minimal_stats() {
                 tile_count: 2,
                 total_bytes: 40,
                 max_bytes: 30,
+                avg_bytes: 20,
             },
         }]
     );
@@ -89,6 +91,7 @@ fn copy_mbtiles_copies_tiles_and_metadata() {
     assert_eq!(report.overall.tile_count, 2);
     assert_eq!(report.overall.total_bytes, 40);
     assert_eq!(report.overall.max_bytes, 30);
+    assert_eq!(report.overall.avg_bytes, 20);
 
     let conn = rusqlite::Connection::open(output).expect("open output");
     let value: String = conn
@@ -135,6 +138,8 @@ fn inspect_mbtiles_topn_and_histogram() {
         topn: 1,
         histogram_buckets: 2,
         no_progress: true,
+        zoom: None,
+        bucket: None,
     };
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");
     assert_eq!(report.top_tiles.len(), 1);
@@ -154,6 +159,8 @@ fn inspect_mbtiles_sample_count() {
         topn: 0,
         histogram_buckets: 0,
         no_progress: true,
+        zoom: None,
+        bucket: None,
     };
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");
     assert_eq!(report.sample_used_tiles, 1);

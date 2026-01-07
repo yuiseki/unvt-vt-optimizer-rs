@@ -21,6 +21,8 @@ fn main() -> Result<()> {
                 topn: args.topn.unwrap_or(0) as usize,
                 histogram_buckets: args.histogram_buckets as usize,
                 no_progress: args.no_progress,
+                zoom: None,
+                bucket: None,
             };
             let report = inspect_mbtiles_with_options(&args.input, options)?;
             match args.output {

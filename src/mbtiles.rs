@@ -12,6 +12,7 @@ pub struct MbtilesStats {
     pub tile_count: u64,
     pub total_bytes: u64,
     pub max_bytes: u64,
+    pub avg_bytes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -31,6 +32,7 @@ pub struct MbtilesReport {
     pub sample_used_tiles: u64,
     pub histogram: Vec<HistogramBucket>,
     pub top_tiles: Vec<TopTile>,
+    pub bucket_count: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -60,6 +62,8 @@ pub struct InspectOptions {
     pub topn: usize,
     pub histogram_buckets: usize,
     pub no_progress: bool,
+    pub zoom: Option<u8>,
+    pub bucket: Option<usize>,
 }
 
 impl Default for InspectOptions {
@@ -69,11 +73,21 @@ impl Default for InspectOptions {
             topn: 0,
             histogram_buckets: 0,
             no_progress: false,
+            zoom: None,
+            bucket: None,
         }
     }
 }
 
 const EMPTY_TILE_MAX_BYTES: u64 = 50;
+
+fn finalize_stats(stats: &mut MbtilesStats) {
+    if stats.tile_count == 0 {
+        stats.avg_bytes = 0;
+    } else {
+        stats.avg_bytes = stats.total_bytes / stats.tile_count;
+    }
+}
 
 pub fn parse_sample_spec(value: &str) -> Result<SampleSpec> {
     let trimmed = value.trim();
@@ -121,6 +135,7 @@ fn build_histogram(
     buckets: usize,
     min_len: u64,
     max_len: u64,
+    zoom: Option<u8>,
 ) -> Result<Vec<HistogramBucket>> {
     if buckets == 0 || min_len > max_len {
         return Ok(Vec::new());
@@ -128,7 +143,7 @@ fn build_histogram(
     let conn = open_readonly_mbtiles(path)?;
     apply_read_pragmas(&conn)?;
     let mut stmt = conn
-        .prepare("SELECT LENGTH(tile_data) FROM tiles")
+        .prepare("SELECT zoom_level, LENGTH(tile_data) FROM tiles")
         .context("prepare histogram scan")?;
     let mut rows = stmt.query([]).context("query histogram scan")?;
 
@@ -138,7 +153,13 @@ fn build_histogram(
 
     let mut index: u64 = 0;
     while let Some(row) = rows.next().context("read histogram row")? {
-        let length: u64 = row.get(0)?;
+        let row_zoom: u8 = row.get(0)?;
+        let length: u64 = row.get(1)?;
+        if let Some(target) = zoom {
+            if row_zoom != target {
+                continue;
+            }
+        }
         index += 1;
         if !include_sample(index, total_tiles, sample) {
             continue;
@@ -219,9 +240,14 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     let conn = open_readonly_mbtiles(path)?;
     apply_read_pragmas(&conn)?;
 
-    let total_tiles: u64 = conn
-        .query_row("SELECT COUNT(*) FROM tiles", [], |row| row.get(0))
-        .context("failed to read tile count")?;
+    let total_tiles: u64 = match options.zoom {
+        Some(z) => conn
+            .query_row("SELECT COUNT(*) FROM tiles WHERE zoom_level = ?1", [z], |row| row.get(0))
+            .context("failed to read tile count (zoom)")?,
+        None => conn
+            .query_row("SELECT COUNT(*) FROM tiles", [], |row| row.get(0))
+            .context("failed to read tile count")?,
+    };
     let progress = if options.no_progress {
         ProgressBar::hidden()
     } else {
@@ -232,6 +258,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         tile_count: 0,
         total_bytes: 0,
         max_bytes: 0,
+        avg_bytes: 0,
     };
 
     let mut stmt = conn
@@ -256,6 +283,12 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         let y: u32 = row.get(2)?;
         let length: u64 = row.get(3)?;
 
+        if let Some(target) = options.zoom {
+            if zoom != target {
+                continue;
+            }
+        }
+
         processed += 1;
 
         if include_sample(processed, total_tiles, options.sample.as_ref()) {
@@ -269,6 +302,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
                 tile_count: 0,
                 total_bytes: 0,
                 max_bytes: 0,
+                avg_bytes: 0,
             });
             entry.tile_count += 1;
             entry.total_bytes += length;
@@ -305,8 +339,13 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
 
     let by_zoom = by_zoom
         .into_iter()
-        .map(|(zoom, stats)| MbtilesZoomStats { zoom, stats })
+        .map(|(zoom, mut stats)| {
+            finalize_stats(&mut stats);
+            MbtilesZoomStats { zoom, stats }
+        })
         .collect::<Vec<_>>();
+
+    finalize_stats(&mut overall);
 
     let mut top_tiles = top_heap
         .into_iter()
@@ -333,10 +372,15 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
             options.histogram_buckets,
             min_len.unwrap(),
             max_len.unwrap(),
+            options.zoom,
         )?
     } else {
         Vec::new()
     };
+
+    let bucket_count = options
+        .bucket
+        .and_then(|idx| histogram.get(idx).map(|b| b.count));
 
     Ok(MbtilesReport {
         overall,
@@ -348,6 +392,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         sample_used_tiles: used,
         histogram,
         top_tiles,
+        bucket_count,
     })
 }
 
