@@ -743,6 +743,10 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     } else {
         make_progress_bar(total_tiles)
     };
+    if !options.no_progress {
+        progress.set_position(0);
+        progress.tick();
+    }
 
     let mut overall = MbtilesStats {
         tile_count: 0,
