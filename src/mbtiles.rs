@@ -148,6 +148,12 @@ fn build_histogram(
             bucket = buckets - 1;
         }
         counts[bucket] += 1;
+
+        if let Some(SampleSpec::Count(limit)) = sample {
+            if counts.iter().sum::<u64>() >= *limit {
+                break;
+            }
+        }
     }
 
     let mut result = Vec::with_capacity(buckets);
@@ -280,6 +286,12 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
                 if top_heap.len() > topn {
                     top_heap.pop();
                 }
+            }
+        }
+
+        if let Some(SampleSpec::Count(limit)) = options.sample {
+            if used >= limit {
+                break;
             }
         }
 
