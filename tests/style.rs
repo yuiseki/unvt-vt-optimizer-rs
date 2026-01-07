@@ -351,3 +351,57 @@ fn style_filter_uses_only_visible_layers() {
         tile_prune::style::FilterResult::True
     );
 }
+
+#[test]
+fn style_filter_supports_legacy_not_syntax() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let style_path = dir.path().join("style.json");
+    fs::write(
+        &style_path,
+        r#"{
+  "version": 8,
+  "sources": { "osm": { "type": "vector" } },
+  "layers": [
+    { "id": "roads-not", "type": "line", "source": "osm", "source-layer": "roads",
+      "filter": ["!", ["==", "class", "secondary"]]
+    }
+  ]
+}"#,
+    )
+    .expect("write style");
+
+    let style = read_style(&style_path).expect("read style");
+    let feature_secondary = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: Some(
+            [(
+                "class".to_string(),
+                mvt_reader::feature::Value::String("secondary".to_string()),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    };
+    let feature_other = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: Some(
+            [(
+                "class".to_string(),
+                mvt_reader::feature::Value::String("tertiary".to_string()),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    };
+    let mut unknown = 0usize;
+    assert_eq!(
+        style.should_keep_feature("roads", 3, &feature_secondary, &mut unknown),
+        tile_prune::style::FilterResult::False
+    );
+    assert_eq!(
+        style.should_keep_feature("roads", 3, &feature_other, &mut unknown),
+        tile_prune::style::FilterResult::True
+    );
+}
