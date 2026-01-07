@@ -297,16 +297,19 @@ fn main() -> Result<()> {
                 .style
                 .as_ref()
                 .context("--style is required for optimize")?;
-            if args.style_mode != tile_prune::cli::StyleMode::Layer {
-                anyhow::bail!("v0.0.36 only supports --style-mode layer");
+            if args.style_mode != tile_prune::cli::StyleMode::Layer
+                && args.style_mode != tile_prune::cli::StyleMode::LayerFilter
+            {
+                anyhow::bail!("v0.0.38 only supports --style-mode layer or layer+filter");
             }
             let style = read_style(style_path)?;
             match (decision.input, decision.output) {
                 (tile_prune::format::TileFormat::Mbtiles, tile_prune::format::TileFormat::Mbtiles) => {
-                    prune_mbtiles_layer_only(&args.input, &_output_path, &style)?;
+                    let apply_filters = args.style_mode == tile_prune::cli::StyleMode::LayerFilter;
+                    prune_mbtiles_layer_only(&args.input, &_output_path, &style, apply_filters)?;
                 }
                 _ => {
-                    anyhow::bail!("v0.0.36 only supports MBTiles input/output for optimize");
+                    anyhow::bail!("v0.0.38 only supports MBTiles input/output for optimize");
                 }
             }
             println!("optimize: input={} output={}", args.input.display(), _output_path.display());

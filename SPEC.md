@@ -362,6 +362,15 @@ v0.0.4 では以下を **含めない**。
   * `PaintPropertiesToCheck` による描画判定（0 判定 / stops 対応）
   * `source-layer` が複数 style layer に存在する場合は OR 判定
 
+---
+
+## 1.40 マイルストーン（v0.0.38）
+
+* prune の filter 最小対応
+  * `==`, `!=`, `in`, `!in`, `has`, `!has`, `all`, `any`, `none`
+  * `$type` の `Point|LineString|Polygon` 判定をサポート
+  * 未対応式は UNKNOWN として keep（安全側）
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）

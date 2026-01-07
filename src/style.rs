@@ -48,6 +48,7 @@ struct MapboxStyleLayer {
     maxzoom: Option<f64>,
     visibility: Option<String>,
     paint: HashMap<String, PaintValue>,
+    filter: Option<Filter>,
 }
 
 impl MapboxStyleLayer {
@@ -107,6 +108,196 @@ impl MapboxStyle {
             })
             .unwrap_or(false)
     }
+
+    pub fn should_keep_feature(
+        &self,
+        layer_name: &str,
+        zoom: u8,
+        feature: &mvt_reader::feature::Feature,
+    ) -> FilterResult {
+        let Some(layers) = self.layers_by_source_layer.get(layer_name) else {
+            return FilterResult::False;
+        };
+        let mut saw_unknown = false;
+        for layer in layers {
+            if !layer.is_visible_on_zoom(zoom) || !layer.is_rendered(zoom) {
+                continue;
+            }
+            let result = match layer.filter.as_ref() {
+                None => FilterResult::True,
+                Some(filter) => filter.evaluate(feature),
+            };
+            match result {
+                FilterResult::True => return FilterResult::True,
+                FilterResult::Unknown => saw_unknown = true,
+                FilterResult::False => {}
+            }
+        }
+        if saw_unknown {
+            FilterResult::Unknown
+        } else {
+            FilterResult::False
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilterResult {
+    True,
+    False,
+    Unknown,
+}
+
+#[derive(Debug, Clone)]
+enum FilterValue {
+    String(String),
+    Number(f64),
+    Bool(bool),
+}
+
+impl FilterValue {
+    fn equals(&self, other: &FilterValue) -> bool {
+        match (self, other) {
+            (FilterValue::String(a), FilterValue::String(b)) => a == b,
+            (FilterValue::Number(a), FilterValue::Number(b)) => (*a - *b).abs() < f64::EPSILON,
+            (FilterValue::Bool(a), FilterValue::Bool(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Filter {
+    Eq(String, FilterValue),
+    Neq(String, FilterValue),
+    In(String, Vec<FilterValue>),
+    NotIn(String, Vec<FilterValue>),
+    Has(String),
+    NotHas(String),
+    All(Vec<Filter>),
+    Any(Vec<Filter>),
+    None(Vec<Filter>),
+    Unknown,
+}
+
+impl Filter {
+    fn evaluate(&self, feature: &mvt_reader::feature::Feature) -> FilterResult {
+        match self {
+            Filter::Eq(key, value) => match feature_value(feature, key) {
+                Some(actual) => FilterResult::from_bool(actual.equals(value)),
+                None => FilterResult::Unknown,
+            },
+            Filter::Neq(key, value) => match feature_value(feature, key) {
+                Some(actual) => FilterResult::from_bool(!actual.equals(value)),
+                None => FilterResult::Unknown,
+            },
+            Filter::In(key, values) => match feature_value(feature, key) {
+                Some(actual) => FilterResult::from_bool(values.iter().any(|v| actual.equals(v))),
+                None => FilterResult::Unknown,
+            },
+            Filter::NotIn(key, values) => match feature_value(feature, key) {
+                Some(actual) => FilterResult::from_bool(!values.iter().any(|v| actual.equals(v))),
+                None => FilterResult::Unknown,
+            },
+            Filter::Has(key) => FilterResult::from_bool(feature_has(feature, key)),
+            Filter::NotHas(key) => FilterResult::from_bool(!feature_has(feature, key)),
+            Filter::All(filters) => {
+                let mut saw_unknown = false;
+                for filter in filters {
+                    match filter.evaluate(feature) {
+                        FilterResult::True => {}
+                        FilterResult::False => return FilterResult::False,
+                        FilterResult::Unknown => saw_unknown = true,
+                    }
+                }
+                if saw_unknown {
+                    FilterResult::Unknown
+                } else {
+                    FilterResult::True
+                }
+            }
+            Filter::Any(filters) => {
+                let mut saw_unknown = false;
+                for filter in filters {
+                    match filter.evaluate(feature) {
+                        FilterResult::True => return FilterResult::True,
+                        FilterResult::False => {}
+                        FilterResult::Unknown => saw_unknown = true,
+                    }
+                }
+                if saw_unknown {
+                    FilterResult::Unknown
+                } else {
+                    FilterResult::False
+                }
+            }
+            Filter::None(filters) => {
+                let mut saw_unknown = false;
+                for filter in filters {
+                    match filter.evaluate(feature) {
+                        FilterResult::True => return FilterResult::False,
+                        FilterResult::False => {}
+                        FilterResult::Unknown => saw_unknown = true,
+                    }
+                }
+                if saw_unknown {
+                    FilterResult::Unknown
+                } else {
+                    FilterResult::True
+                }
+            }
+            Filter::Unknown => FilterResult::Unknown,
+        }
+    }
+}
+
+impl FilterResult {
+    fn from_bool(value: bool) -> Self {
+        if value {
+            FilterResult::True
+        } else {
+            FilterResult::False
+        }
+    }
+}
+
+fn feature_has(feature: &mvt_reader::feature::Feature, key: &str) -> bool {
+    if key == "$type" {
+        return true;
+    }
+    feature
+        .properties
+        .as_ref()
+        .map(|props| props.contains_key(key))
+        .unwrap_or(false)
+}
+
+fn feature_value(feature: &mvt_reader::feature::Feature, key: &str) -> Option<FilterValue> {
+    if key == "$type" {
+        return Some(FilterValue::String(feature_type(feature).to_string()));
+    }
+    let props = feature.properties.as_ref()?;
+    let value = props.get(key)?;
+    match value {
+        mvt_reader::feature::Value::String(text) => Some(FilterValue::String(text.clone())),
+        mvt_reader::feature::Value::Float(val) => Some(FilterValue::Number(*val as f64)),
+        mvt_reader::feature::Value::Double(val) => Some(FilterValue::Number(*val)),
+        mvt_reader::feature::Value::Int(val) => Some(FilterValue::Number(*val as f64)),
+        mvt_reader::feature::Value::UInt(val) => Some(FilterValue::Number(*val as f64)),
+        mvt_reader::feature::Value::SInt(val) => Some(FilterValue::Number(*val as f64)),
+        mvt_reader::feature::Value::Bool(val) => Some(FilterValue::Bool(*val)),
+        mvt_reader::feature::Value::Null => None,
+    }
+}
+
+fn feature_type(feature: &mvt_reader::feature::Feature) -> &'static str {
+    use geo_types::Geometry;
+    match feature.geometry {
+        Geometry::Point(_) | Geometry::MultiPoint(_) => "Point",
+        Geometry::LineString(_) | Geometry::MultiLineString(_) | Geometry::Line(_) => "LineString",
+        Geometry::Polygon(_) | Geometry::MultiPolygon(_) | Geometry::Rect(_) | Geometry::Triangle(_) => "Polygon",
+        Geometry::GeometryCollection(_) => "Unknown",
+    }
 }
 
 fn parse_paint_value(value: &Value) -> Option<PaintValue> {
@@ -132,6 +323,97 @@ fn parse_paint_value(value: &Value) -> Option<PaintValue> {
     } else {
         Some(PaintValue::Stops(parsed))
     }
+}
+
+fn parse_filter(value: &Value) -> Option<Filter> {
+    let array = value.as_array()?;
+    if array.is_empty() {
+        return None;
+    }
+    let op = array[0].as_str()?;
+    match op {
+        "==" | "!=" => {
+            if array.len() < 3 {
+                return Some(Filter::Unknown);
+            }
+            let key = array[1].as_str()?.to_string();
+            let value = parse_filter_value(&array[2])?;
+            if op == "==" {
+                Some(Filter::Eq(key, value))
+            } else {
+                Some(Filter::Neq(key, value))
+            }
+        }
+        "in" | "!in" => {
+            if array.len() < 3 {
+                return Some(Filter::Unknown);
+            }
+            let key = array[1].as_str()?.to_string();
+            let mut values = Vec::new();
+            if let Some(list) = array[2].as_array() {
+                for item in list {
+                    if let Some(value) = parse_filter_value(item) {
+                        values.push(value);
+                    } else {
+                        return Some(Filter::Unknown);
+                    }
+                }
+            } else {
+                for item in &array[2..] {
+                    if let Some(value) = parse_filter_value(item) {
+                        values.push(value);
+                    } else {
+                        return Some(Filter::Unknown);
+                    }
+                }
+            }
+            if op == "in" {
+                Some(Filter::In(key, values))
+            } else {
+                Some(Filter::NotIn(key, values))
+            }
+        }
+        "has" | "!has" => {
+            if array.len() < 2 {
+                return Some(Filter::Unknown);
+            }
+            let key = array[1].as_str()?.to_string();
+            if op == "has" {
+                Some(Filter::Has(key))
+            } else {
+                Some(Filter::NotHas(key))
+            }
+        }
+        "all" | "any" | "none" => {
+            let mut filters = Vec::new();
+            for item in &array[1..] {
+                if let Some(filter) = parse_filter(item) {
+                    filters.push(filter);
+                } else {
+                    filters.push(Filter::Unknown);
+                }
+            }
+            match op {
+                "all" => Some(Filter::All(filters)),
+                "any" => Some(Filter::Any(filters)),
+                _ => Some(Filter::None(filters)),
+            }
+        }
+        _ => Some(Filter::Unknown),
+    }
+}
+
+fn parse_filter_value(value: &Value) -> Option<FilterValue> {
+    if let Some(text) = value.as_str() {
+        return Some(FilterValue::String(text.to_string()));
+    }
+    if let Some(number) = value.as_f64() {
+        return Some(FilterValue::Number(number));
+    }
+    if let Some(boolean) = value.as_bool() {
+        return Some(FilterValue::Bool(boolean));
+    }
+    None
 }
 
 pub fn read_style(path: &Path) -> Result<MapboxStyle> {
@@ -166,6 +448,7 @@ pub fn read_style(path: &Path) -> Result<MapboxStyle> {
                 }
             }
         }
+        let filter = layer.get("filter").and_then(parse_filter);
         layers_by_source_layer
             .entry(source_layer.to_string())
             .or_default()
@@ -174,6 +457,7 @@ pub fn read_style(path: &Path) -> Result<MapboxStyle> {
                 maxzoom,
                 visibility,
                 paint,
+                filter,
             });
     }
 

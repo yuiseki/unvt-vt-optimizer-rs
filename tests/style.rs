@@ -31,3 +31,23 @@ fn style_visibility_checks_zoom_and_paint() {
     assert!(!style.is_layer_visible_on_zoom("roads", 3));
     assert!(style.is_layer_visible_on_zoom("roads", 4));
 }
+
+#[test]
+fn style_filter_allows_type_checks() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let style_path = dir.path().join("style.json");
+    fs::write(
+        &style_path,
+        r#"{
+  "version": 8,
+  "sources": { "osm": { "type": "vector" } },
+  "layers": [
+    { "id": "water", "type": "fill", "source": "osm", "source-layer": "water", "filter": ["==", "$type", "Polygon"] }
+  ]
+}"#,
+    )
+    .expect("write style");
+
+    let style = read_style(&style_path).expect("read style");
+    assert!(style.is_layer_visible_on_zoom("water", 0));
+}
