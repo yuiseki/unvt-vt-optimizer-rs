@@ -7,7 +7,7 @@ use tile_prune::mbtiles::{
     copy_mbtiles, inspect_mbtiles_with_options, parse_sample_spec, parse_tile_spec, InspectOptions,
     TileListOptions, TileSort,
 };
-use tile_prune::output::ndjson_lines;
+use tile_prune::output::{ndjson_lines, resolve_output_format};
 use tile_prune::pmtiles::{mbtiles_to_pmtiles, pmtiles_to_mbtiles};
 
 fn main() -> Result<()> {
@@ -16,11 +16,9 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Inspect(args) => {
-            if args.ndjson_lite && args.output != ReportFormat::Ndjson {
+            let output = resolve_output_format(args.output, args.ndjson_compact);
+            if args.ndjson_lite && output != ReportFormat::Ndjson {
                 anyhow::bail!("--ndjson-lite requires --output ndjson");
-            }
-            if args.ndjson_compact && args.output != ReportFormat::Ndjson {
-                anyhow::bail!("--ndjson-compact requires --output ndjson");
             }
             let sample = match args.sample.as_deref() {
                 Some(value) => Some(parse_sample_spec(value)?),
@@ -80,7 +78,7 @@ fn main() -> Result<()> {
                 },
             };
             let report = inspect_mbtiles_with_options(&args.input, options)?;
-            match args.output {
+            match output {
                 ReportFormat::Json => {
                     let json = serde_json::to_string_pretty(&report)?;
                     println!("{}", json);

@@ -1,7 +1,16 @@
 use anyhow::Result;
 use serde_json::json;
 
+use crate::cli::ReportFormat;
 use crate::mbtiles::MbtilesReport;
+
+pub fn resolve_output_format(requested: ReportFormat, ndjson_compact: bool) -> ReportFormat {
+    if ndjson_compact {
+        ReportFormat::Ndjson
+    } else {
+        requested
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct NdjsonOptions {

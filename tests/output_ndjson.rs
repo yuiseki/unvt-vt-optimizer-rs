@@ -2,7 +2,7 @@ use tile_prune::mbtiles::{
     HistogramBucket, MbtilesReport, MbtilesStats, MbtilesZoomStats, TileSummary, TopTile,
     ZoomHistogram,
 };
-use tile_prune::output::{ndjson_lines, NdjsonOptions};
+use tile_prune::output::{ndjson_lines, resolve_output_format, NdjsonOptions};
 
 #[test]
 fn ndjson_splits_histograms_and_top_tile_summaries() {
@@ -348,4 +348,12 @@ fn ndjson_compact_omits_summary_even_when_requested() {
         !lines.iter().any(|line| line.contains("\"type\":\"summary\"")),
         "compact mode should omit summary"
     );
+}
+
+#[test]
+fn ndjson_compact_forces_output_format() {
+    let output = resolve_output_format(tile_prune::cli::ReportFormat::Text, true);
+    assert_eq!(output, tile_prune::cli::ReportFormat::Ndjson);
+    let output = resolve_output_format(tile_prune::cli::ReportFormat::Json, false);
+    assert_eq!(output, tile_prune::cli::ReportFormat::Json);
 }
