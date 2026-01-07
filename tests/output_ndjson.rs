@@ -146,3 +146,67 @@ fn ndjson_lite_omits_summary() {
         "summary line should be omitted"
     );
 }
+
+#[test]
+fn ndjson_sorts_zoom_histograms_and_recommendations() {
+    let report = MbtilesReport {
+        overall: MbtilesStats {
+            tile_count: 1,
+            total_bytes: 10,
+            max_bytes: 10,
+            avg_bytes: 10,
+        },
+        by_zoom: vec![],
+        empty_tiles: 0,
+        empty_ratio: 0.0,
+        sampled: false,
+        sample_total_tiles: 1,
+        sample_used_tiles: 1,
+        histogram: vec![],
+        histograms_by_zoom: vec![
+            ZoomHistogram {
+                zoom: 3,
+                buckets: vec![],
+            },
+            ZoomHistogram {
+                zoom: 1,
+                buckets: vec![],
+            },
+        ],
+        top_tiles: vec![],
+        bucket_count: None,
+        bucket_tiles: vec![],
+        tile_summary: None,
+        recommended_buckets: vec![2, 0, 1],
+        top_tile_summaries: vec![],
+    };
+
+    let lines = ndjson_lines(&report, true).expect("ndjson");
+    let zooms = lines
+        .iter()
+        .filter_map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).ok()?;
+            if value.get("type")?.as_str()? == "histogram_by_zoom" {
+                return value.get("zoom")?.as_u64();
+            }
+            None
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(zooms, vec![1, 3]);
+
+    let buckets = lines
+        .iter()
+        .find_map(|line| {
+            let value: serde_json::Value = serde_json::from_str(line).ok()?;
+            if value.get("type")?.as_str()? == "recommended_buckets" {
+                return value.get("buckets")?.as_array().cloned();
+            }
+            None
+        })
+        .expect("recommended buckets");
+    let buckets = buckets
+        .into_iter()
+        .filter_map(|value| value.as_u64())
+        .collect::<Vec<_>>();
+    assert_eq!(buckets, vec![0, 1, 2]);
+}

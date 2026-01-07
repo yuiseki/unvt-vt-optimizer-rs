@@ -26,7 +26,9 @@ pub fn ndjson_lines(report: &MbtilesReport, include_summary: bool) -> Result<Vec
     }
 
     if !report.histograms_by_zoom.is_empty() {
-        for item in report.histograms_by_zoom.iter() {
+        let mut histograms = report.histograms_by_zoom.clone();
+        histograms.sort_by_key(|item| item.zoom);
+        for item in histograms.iter() {
             lines.push(serde_json::to_string(&json!({
                 "type": "histogram_by_zoom",
                 "zoom": item.zoom,
@@ -68,9 +70,11 @@ pub fn ndjson_lines(report: &MbtilesReport, include_summary: bool) -> Result<Vec
     }
 
     if !report.recommended_buckets.is_empty() {
+        let mut buckets = report.recommended_buckets.clone();
+        buckets.sort_unstable();
         lines.push(serde_json::to_string(&json!({
             "type": "recommended_buckets",
-            "buckets": report.recommended_buckets,
+            "buckets": buckets,
         }))?);
     }
 
