@@ -98,9 +98,11 @@ fn inspect_tile_summary_reports_layer_counts() {
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[0].feature_count, 2);
     assert_eq!(summary.layers[0].property_key_count, 2);
+    assert_eq!(summary.layers[0].property_keys, vec!["class".to_string(), "name".to_string()]);
     assert_eq!(summary.layers[1].name, "buildings");
     assert_eq!(summary.layers[1].feature_count, 1);
     assert_eq!(summary.layers[1].property_key_count, 1);
+    assert_eq!(summary.layers[1].property_keys, vec!["height".to_string()]);
 }
 
 #[test]
@@ -164,4 +166,5 @@ fn inspect_tile_summary_filters_layer() {
     assert_eq!(summary.layers.len(), 1);
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[0].property_key_count, 2);
+    assert_eq!(summary.layers[0].property_keys, vec!["class".to_string(), "name".to_string()]);
 }

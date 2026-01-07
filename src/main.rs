@@ -216,6 +216,9 @@ fn main() -> Result<()> {
                                 "layer: {} features={} property_keys={}",
                                 layer.name, layer.feature_count, layer.property_key_count
                             );
+                            if !layer.property_keys.is_empty() {
+                                println!("  keys: {}", layer.property_keys.join(","));
+                            }
                         }
                     }
                 }

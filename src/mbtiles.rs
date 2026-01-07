@@ -78,6 +78,7 @@ pub struct LayerSummary {
     pub name: String,
     pub feature_count: usize,
     pub property_key_count: usize,
+    pub property_keys: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -351,12 +352,15 @@ fn build_tile_summary(
                 }
             }
         }
+        let mut key_list = keys.into_iter().collect::<Vec<_>>();
+        key_list.sort();
         let feature_count = layer.feature_count;
         total_features += feature_count;
         summaries.push(LayerSummary {
             name: layer.name,
             feature_count,
-            property_key_count: keys.len(),
+            property_key_count: key_list.len(),
+            property_keys: key_list,
         });
     }
     Ok(TileSummary {
