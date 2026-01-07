@@ -83,8 +83,10 @@ fn format_metadata_section_lists_entries() {
     let mut metadata = BTreeMap::new();
     metadata.insert("name".to_string(), "sample".to_string());
     metadata.insert("format".to_string(), "pbf".to_string());
+    metadata.insert("json".to_string(), "{\"hello\":true}".to_string());
     let lines = format_metadata_section(&metadata);
     assert_eq!(lines.first(), Some(&"## Metadata".to_string()));
     assert!(lines.iter().any(|line| line.contains("- name: sample")));
     assert!(lines.iter().any(|line| line.contains("- format: pbf")));
+    assert!(!lines.iter().any(|line| line.contains("- json:")));
 }
