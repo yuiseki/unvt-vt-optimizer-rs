@@ -465,6 +465,14 @@ v0.0.4 では以下を **含めない**。
 * filter 式の中核拡張
   * `match` / `case` / `coalesce` を評価
 
+---
+
+## 1.53 マイルストーン（v0.0.51）
+
+* 同一 source-layer の結合ルール確定
+  * 可視 layer のみ filter を評価して OR 結合
+  * minzoom/maxzoom と整合した判定
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）

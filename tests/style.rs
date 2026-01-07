@@ -227,3 +227,127 @@ fn style_filter_supports_match_case_coalesce() {
         tile_prune::style::FilterResult::False
     );
 }
+
+#[test]
+fn style_filter_combines_layers_with_or() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let style_path = dir.path().join("style.json");
+    fs::write(
+        &style_path,
+        r#"{
+  "version": 8,
+  "sources": { "osm": { "type": "vector" } },
+  "layers": [
+    { "id": "roads-primary", "type": "line", "source": "osm", "source-layer": "roads",
+      "filter": ["==", ["get", "class"], "primary"]
+    },
+    { "id": "roads-secondary", "type": "line", "source": "osm", "source-layer": "roads",
+      "filter": ["==", ["get", "class"], "secondary"]
+    }
+  ]
+}"#,
+    )
+    .expect("write style");
+
+    let style = read_style(&style_path).expect("read style");
+    let feature_primary = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: Some(
+            [(
+                "class".to_string(),
+                mvt_reader::feature::Value::String("primary".to_string()),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    };
+    let feature_secondary = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: Some(
+            [(
+                "class".to_string(),
+                mvt_reader::feature::Value::String("secondary".to_string()),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    };
+    let feature_other = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: Some(
+            [(
+                "class".to_string(),
+                mvt_reader::feature::Value::String("tertiary".to_string()),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    };
+    let mut unknown = 0usize;
+    assert_eq!(
+        style.should_keep_feature("roads", 3, &feature_primary, &mut unknown),
+        tile_prune::style::FilterResult::True
+    );
+    assert_eq!(
+        style.should_keep_feature("roads", 3, &feature_secondary, &mut unknown),
+        tile_prune::style::FilterResult::True
+    );
+    assert_eq!(
+        style.should_keep_feature("roads", 3, &feature_other, &mut unknown),
+        tile_prune::style::FilterResult::False
+    );
+}
+
+#[test]
+fn style_filter_uses_only_visible_layers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let style_path = dir.path().join("style.json");
+    fs::write(
+        &style_path,
+        r#"{
+  "version": 8,
+  "sources": { "osm": { "type": "vector" } },
+  "layers": [
+    { "id": "roads-hidden", "type": "line", "source": "osm", "source-layer": "roads",
+      "layout": { "visibility": "none" },
+      "filter": ["==", ["get", "class"], "primary"]
+    },
+    { "id": "roads-zero", "type": "line", "source": "osm", "source-layer": "roads",
+      "paint": { "line-width": 0 },
+      "filter": ["==", ["get", "class"], "primary"]
+    },
+    { "id": "roads-visible", "type": "line", "source": "osm", "source-layer": "roads",
+      "minzoom": 10,
+      "filter": ["==", ["get", "class"], "primary"]
+    }
+  ]
+}"#,
+    )
+    .expect("write style");
+
+    let style = read_style(&style_path).expect("read style");
+    let feature_primary = mvt_reader::feature::Feature {
+        geometry: geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0)),
+        id: None,
+        properties: Some(
+            [(
+                "class".to_string(),
+                mvt_reader::feature::Value::String("primary".to_string()),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+    };
+    let mut unknown = 0usize;
+    assert_eq!(
+        style.should_keep_feature("roads", 5, &feature_primary, &mut unknown),
+        tile_prune::style::FilterResult::False
+    );
+    assert_eq!(
+        style.should_keep_feature("roads", 10, &feature_primary, &mut unknown),
+        tile_prune::style::FilterResult::True
+    );
+}
