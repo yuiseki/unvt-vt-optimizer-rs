@@ -12,7 +12,7 @@ use serde_json::Value;
 use varint_rs::{VarintReader, VarintWriter};
 
 use crate::mbtiles::{
-    HistogramBucket, InspectOptions, MbtilesReport, MbtilesStats, MbtilesZoomStats,
+    HistogramBucket, InspectOptions, MbtilesReport, MbtilesStats, MbtilesZoomStats, ZoomHistogram,
 };
 
 const HEADER_SIZE: usize = 127;
@@ -467,6 +467,7 @@ fn accumulate_tile_counts(
     empty_tiles: &mut u64,
     min_len: &mut Option<u64>,
     max_len: &mut Option<u64>,
+    zoom_minmax: &mut BTreeMap<u8, (u64, u64)>,
 ) -> Result<()> {
     for entry in entries {
         if entry.run_length == 0 {
@@ -486,6 +487,7 @@ fn accumulate_tile_counts(
                 empty_tiles,
                 min_len,
                 max_len,
+                zoom_minmax,
             )?;
             continue;
         }
@@ -510,6 +512,13 @@ fn accumulate_tile_counts(
             }
             *min_len = Some(min_len.map_or(length, |min| min.min(length)));
             *max_len = Some(max_len.map_or(length, |max| max.max(length)));
+            zoom_minmax
+                .entry(z)
+                .and_modify(|(min, max)| {
+                    *min = (*min).min(length);
+                    *max = (*max).max(length);
+                })
+                .or_insert((length, length));
         }
     }
     Ok(())
@@ -628,6 +637,157 @@ fn build_histogram_from_entries(
     Ok(result)
 }
 
+fn build_zoom_histograms_from_entries(
+    file: &File,
+    header: &Header,
+    entries: &[Entry],
+    zoom_filter: Option<u8>,
+    zoom_minmax: &BTreeMap<u8, (u64, u64)>,
+    buckets: usize,
+    max_tile_bytes: u64,
+) -> Result<Vec<ZoomHistogram>> {
+    if buckets == 0 || zoom_minmax.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    struct ZoomAccum {
+        min_len: u64,
+        max_len: u64,
+        bucket_size: u64,
+        counts: Vec<u64>,
+        bytes: Vec<u64>,
+        used_tiles: u64,
+        used_bytes: u64,
+    }
+
+    let mut accums: BTreeMap<u8, ZoomAccum> = BTreeMap::new();
+    for (zoom, (min_len, max_len)) in zoom_minmax.iter() {
+        if let Some(target_zoom) = zoom_filter {
+            if *zoom != target_zoom {
+                continue;
+            }
+        }
+        let range = (max_len - min_len).max(1);
+        let bucket_size = ((range as f64) / buckets as f64).ceil() as u64;
+        accums.insert(
+            *zoom,
+            ZoomAccum {
+                min_len: *min_len,
+                max_len: *max_len,
+                bucket_size,
+                counts: vec![0u64; buckets],
+                bytes: vec![0u64; buckets],
+                used_tiles: 0,
+                used_bytes: 0,
+            },
+        );
+    }
+
+    let mut stack = vec![entries.to_vec()];
+    while let Some(entries) = stack.pop() {
+        for entry in entries.iter() {
+            if entry.run_length == 0 {
+                if entry.length == 0 {
+                    continue;
+                }
+                let leaf_offset = header.leaf_offset + entry.offset;
+                let leaf_entries =
+                    read_directory_section(file, header, leaf_offset, entry.length as u64)?;
+                stack.push(leaf_entries);
+                continue;
+            }
+            let length = entry.length as u64;
+            let run = entry.run_length.max(1);
+            for idx in 0..run {
+                let tile_id = entry.tile_id + idx as u64;
+                let (z, _x, _y) = tile_id_to_xyz(tile_id);
+                if let Some(target_zoom) = zoom_filter {
+                    if z != target_zoom {
+                        continue;
+                    }
+                }
+                let Some(accum) = accums.get_mut(&z) else {
+                    continue;
+                };
+                let mut bucket = ((length.saturating_sub(accum.min_len)) / accum.bucket_size) as usize;
+                if bucket >= buckets {
+                    bucket = buckets - 1;
+                }
+                accum.counts[bucket] += 1;
+                accum.bytes[bucket] += length;
+                accum.used_tiles += 1;
+                accum.used_bytes += length;
+            }
+        }
+    }
+
+    let mut result = Vec::new();
+    let limit_threshold = (max_tile_bytes as f64) * 0.9;
+    for (zoom, accum) in accums.into_iter() {
+        let mut buckets_vec = Vec::with_capacity(buckets);
+        let mut accum_count = 0u64;
+        let mut accum_bytes = 0u64;
+        for i in 0..buckets {
+            let b_min = accum.min_len + accum.bucket_size * i as u64;
+            let b_max = if i + 1 == buckets {
+                accum.max_len
+            } else {
+                (accum.min_len + accum.bucket_size * (i as u64 + 1)).saturating_sub(1)
+            };
+            accum_count += accum.counts[i];
+            accum_bytes += accum.bytes[i];
+            let running_avg = if accum_count == 0 {
+                0
+            } else {
+                accum_bytes / accum_count
+            };
+            let pct_tiles = if accum.used_tiles == 0 {
+                0.0
+            } else {
+                accum.counts[i] as f64 / accum.used_tiles as f64
+            };
+            let pct_level_bytes = if accum.used_bytes == 0 {
+                0.0
+            } else {
+                accum.bytes[i] as f64 / accum.used_bytes as f64
+            };
+            let accum_pct_tiles = if accum.used_tiles == 0 {
+                0.0
+            } else {
+                accum_count as f64 / accum.used_tiles as f64
+            };
+            let accum_pct_level_bytes = if accum.used_bytes == 0 {
+                0.0
+            } else {
+                accum_bytes as f64 / accum.used_bytes as f64
+            };
+            let avg_over_limit =
+                max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
+            let avg_near_limit = max_tile_bytes > 0
+                && !avg_over_limit
+                && (running_avg as f64) >= limit_threshold;
+            buckets_vec.push(HistogramBucket {
+                min_bytes: b_min,
+                max_bytes: b_max,
+                count: accum.counts[i],
+                total_bytes: accum.bytes[i],
+                running_avg_bytes: running_avg,
+                pct_tiles,
+                pct_level_bytes,
+                accum_pct_tiles,
+                accum_pct_level_bytes,
+                avg_near_limit,
+                avg_over_limit,
+            });
+        }
+        result.push(ZoomHistogram {
+            zoom,
+            buckets: buckets_vec,
+        });
+    }
+    Ok(result)
+}
+
 pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Result<MbtilesReport> {
     ensure_pmtiles_path(path)?;
     let file = File::open(path)
@@ -646,6 +806,7 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
     let mut empty_tiles = 0u64;
     let mut min_len: Option<u64> = None;
     let mut max_len: Option<u64> = None;
+    let mut zoom_minmax: BTreeMap<u8, (u64, u64)> = BTreeMap::new();
     accumulate_tile_counts(
         &file,
         &header,
@@ -656,6 +817,7 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
         &mut empty_tiles,
         &mut min_len,
         &mut max_len,
+        &mut zoom_minmax,
     )?;
 
     let histogram = match (min_len, max_len) {
@@ -673,6 +835,16 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
         )?,
         _ => Vec::new(),
     };
+
+    let histograms_by_zoom = build_zoom_histograms_from_entries(
+        &file,
+        &header,
+        &root_entries,
+        options.zoom,
+        &zoom_minmax,
+        options.histogram_buckets,
+        options.max_tile_bytes,
+    )?;
 
     let by_zoom = by_zoom
         .into_iter()
@@ -699,7 +871,7 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
         sample_total_tiles: 0,
         sample_used_tiles: 0,
         histogram,
-        histograms_by_zoom: Vec::new(),
+        histograms_by_zoom,
         file_layers: Vec::new(),
         top_tiles: Vec::new(),
         bucket_count: None,

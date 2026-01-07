@@ -206,3 +206,35 @@ fn inspect_pmtiles_counts_tiles_by_zoom() {
                 && entry.stats.avg_bytes == 20
         }));
 }
+
+#[test]
+fn inspect_pmtiles_builds_histograms_by_zoom() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let input = dir.path().join("input.mbtiles");
+    let pmtiles = dir.path().join("output.pmtiles");
+    create_sample_mbtiles(&input);
+
+    mbtiles_to_pmtiles(&input, &pmtiles).expect("mbtiles->pmtiles");
+    let mut options = InspectOptions::default();
+    options.histogram_buckets = 3;
+    let report = inspect_pmtiles_with_options(&pmtiles, &options).expect("inspect pmtiles");
+
+    assert_eq!(report.histograms_by_zoom.len(), 2);
+    let z0 = report
+        .histograms_by_zoom
+        .iter()
+        .find(|entry| entry.zoom == 0)
+        .expect("z0 histogram");
+    assert_eq!(z0.buckets.len(), 3);
+    assert_eq!(z0.buckets[0].count, 1);
+    assert_eq!(z0.buckets[0].total_bytes, 10);
+
+    let z1 = report
+        .histograms_by_zoom
+        .iter()
+        .find(|entry| entry.zoom == 1)
+        .expect("z1 histogram");
+    assert_eq!(z1.buckets.len(), 3);
+    assert_eq!(z1.buckets[0].count, 1);
+    assert_eq!(z1.buckets[0].total_bytes, 20);
+}
