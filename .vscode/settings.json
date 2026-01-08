@@ -27,6 +27,7 @@
         "cargo clippy": true,
         "cargo test": true,
         "cargo build": true,
-        "git checkout": true
+        "git checkout": true,
+        "git tag": true
     }
 }
