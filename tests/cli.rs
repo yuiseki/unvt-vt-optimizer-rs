@@ -1,7 +1,7 @@
 use clap::{CommandFactory, Parser};
 
-use vt_optimizer::cli::{Cli, Command, StyleMode};
 use vt_optimizer::cli::ReportFormat;
+use vt_optimizer::cli::{Cli, Command, StyleMode};
 
 #[test]
 fn parse_optimize_minimal() {
@@ -71,7 +71,13 @@ fn parse_optimize_options() {
 
 #[test]
 fn parse_optimize_style_modes() {
-    let cli = Cli::parse_from(["vt-optimizer", "optimize", "in.mbtiles", "--style-mode", "none"]);
+    let cli = Cli::parse_from([
+        "vt-optimizer",
+        "optimize",
+        "in.mbtiles",
+        "--style-mode",
+        "none",
+    ]);
     match cli.command {
         Some(Command::Optimize(args)) => {
             assert_eq!(args.style_mode, StyleMode::None);
@@ -79,7 +85,13 @@ fn parse_optimize_style_modes() {
         _ => panic!("expected optimize command"),
     }
 
-    let cli = Cli::parse_from(["vt-optimizer", "optimize", "in.mbtiles", "--style-mode", "layer"]);
+    let cli = Cli::parse_from([
+        "vt-optimizer",
+        "optimize",
+        "in.mbtiles",
+        "--style-mode",
+        "layer",
+    ]);
     match cli.command {
         Some(Command::Optimize(args)) => {
             assert_eq!(args.style_mode, StyleMode::Layer);
@@ -164,7 +176,13 @@ fn parse_inspect_options() {
 
 #[test]
 fn parse_inspect_output_ndjson() {
-    let cli = Cli::parse_from(["vt-optimizer", "inspect", "input.mbtiles", "--output", "ndjson"]);
+    let cli = Cli::parse_from([
+        "vt-optimizer",
+        "inspect",
+        "input.mbtiles",
+        "--output",
+        "ndjson",
+    ]);
     match cli.command {
         Some(Command::Inspect(args)) => {
             assert_eq!(args.output, ReportFormat::Ndjson);
@@ -176,9 +194,7 @@ fn parse_inspect_output_ndjson() {
 #[test]
 fn inspect_help_describes_fields() {
     let mut cmd = Cli::command();
-    let inspect = cmd
-        .find_subcommand_mut("inspect")
-        .expect("inspect command");
+    let inspect = cmd.find_subcommand_mut("inspect").expect("inspect command");
     let mut buffer = Vec::new();
     inspect.write_long_help(&mut buffer).expect("help");
     let help = String::from_utf8(buffer).expect("utf8");

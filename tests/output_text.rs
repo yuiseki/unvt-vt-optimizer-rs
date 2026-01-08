@@ -5,6 +5,7 @@ use vt_optimizer::output::{
     format_histogram_table, format_histograms_by_zoom_section, format_metadata_section,
 };
 
+#[allow(clippy::too_many_arguments)]
 fn bucket(
     min_bytes: u64,
     max_bytes: u64,

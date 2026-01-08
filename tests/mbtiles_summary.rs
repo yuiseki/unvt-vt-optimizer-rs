@@ -1,7 +1,7 @@
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 
-use flate2::{Compression, write::GzEncoder};
+use flate2::{write::GzEncoder, Compression};
 use mvt::{GeomEncoder, GeomType, Tile};
 
 use vt_optimizer::mbtiles::{inspect_mbtiles_with_options, InspectOptions, TileCoord};
@@ -80,7 +80,11 @@ fn inspect_tile_summary_reports_layer_counts() {
         max_tile_bytes: 0,
         zoom: None,
         bucket: None,
-        tile: Some(TileCoord { zoom: 3, x: 4, y: 5 }),
+        tile: Some(TileCoord {
+            zoom: 3,
+            x: 4,
+            y: 5,
+        }),
         summary: true,
         layer: None,
         recommend: false,
@@ -98,7 +102,10 @@ fn inspect_tile_summary_reports_layer_counts() {
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[0].feature_count, 2);
     assert_eq!(summary.layers[0].property_key_count, 2);
-    assert_eq!(summary.layers[0].property_keys, vec!["class".to_string(), "name".to_string()]);
+    assert_eq!(
+        summary.layers[0].property_keys,
+        vec!["class".to_string(), "name".to_string()]
+    );
     assert_eq!(summary.layers[1].name, "buildings");
     assert_eq!(summary.layers[1].feature_count, 1);
     assert_eq!(summary.layers[1].property_key_count, 1);
@@ -123,7 +130,11 @@ fn inspect_tile_summary_decodes_gzip_tiles() {
         max_tile_bytes: 0,
         zoom: None,
         bucket: None,
-        tile: Some(TileCoord { zoom: 3, x: 4, y: 5 }),
+        tile: Some(TileCoord {
+            zoom: 3,
+            x: 4,
+            y: 5,
+        }),
         summary: true,
         layer: None,
         recommend: false,
@@ -152,7 +163,11 @@ fn inspect_tile_summary_filters_layer() {
         max_tile_bytes: 0,
         zoom: None,
         bucket: None,
-        tile: Some(TileCoord { zoom: 3, x: 4, y: 5 }),
+        tile: Some(TileCoord {
+            zoom: 3,
+            x: 4,
+            y: 5,
+        }),
         summary: true,
         layer: Some("roads".to_string()),
         recommend: false,
@@ -166,5 +181,8 @@ fn inspect_tile_summary_filters_layer() {
     assert_eq!(summary.layers.len(), 1);
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[0].property_key_count, 2);
-    assert_eq!(summary.layers[0].property_keys, vec!["class".to_string(), "name".to_string()]);
+    assert_eq!(
+        summary.layers[0].property_keys,
+        vec!["class".to_string(), "name".to_string()]
+    );
 }

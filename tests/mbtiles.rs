@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use vt_optimizer::mbtiles::{
-    copy_mbtiles, inspect_mbtiles, inspect_mbtiles_with_options, MbtilesStats, MbtilesZoomStats,
-    InspectOptions, SampleSpec, parse_sample_spec,
+    copy_mbtiles, inspect_mbtiles, inspect_mbtiles_with_options, parse_sample_spec, InspectOptions,
+    MbtilesStats, MbtilesZoomStats, SampleSpec,
 };
 
 fn create_sample_mbtiles(path: &Path) {

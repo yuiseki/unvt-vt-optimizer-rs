@@ -18,5 +18,11 @@
         "tileset",
         "topn",
         "varint"
-    ]
+    ],
+    "chat.tools.terminal.autoApprove": {
+        "cargo fmt": true,
+        "cargo clippy": true,
+        "cargo test": true,
+        "cargo build": true
+    }
 }

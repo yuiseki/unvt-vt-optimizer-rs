@@ -18,6 +18,7 @@ impl TileFormat {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(name: &str) -> Option<Self> {
         match name.to_ascii_lowercase().as_str() {
             "mbtiles" => Some(TileFormat::Mbtiles),
@@ -54,7 +55,8 @@ pub fn decide_formats(
     };
 
     let output = if let Some(name) = output_format {
-        TileFormat::from_str(name).ok_or_else(|| anyhow::anyhow!("unknown output format: {name}"))?
+        TileFormat::from_str(name)
+            .ok_or_else(|| anyhow::anyhow!("unknown output format: {name}"))?
     } else if let Some(path) = output_path {
         if let Some(fmt) = TileFormat::from_extension(path) {
             fmt
@@ -90,9 +92,7 @@ pub fn validate_output_format_matches_path(
 
     if let Some(path_fmt) = TileFormat::from_extension(path) {
         if path_fmt != declared {
-            bail!(
-                "output format ({fmt_name}) conflicts with output file extension",
-            );
+            bail!("output format ({fmt_name}) conflicts with output file extension",);
         }
     }
 
@@ -128,10 +128,7 @@ pub fn default_output_path_pruned(input_path: &Path, output_format: TileFormat) 
         .unwrap_or("output");
 
     let file_name = format!("{stem}.pruned.{}", output_format.extension_str());
-    let mut out = input_path
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_default();
+    let mut out = input_path.parent().map(PathBuf::from).unwrap_or_default();
     out.push(file_name);
     out
 }

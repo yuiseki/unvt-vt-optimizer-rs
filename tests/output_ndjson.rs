@@ -115,7 +115,10 @@ fn ndjson_splits_histograms_and_top_tile_summaries() {
         .iter()
         .filter(|t| t == &&"top_tile_summary".to_string())
         .count();
-    let top_tile = types.iter().filter(|t| t == &&"top_tile".to_string()).count();
+    let top_tile = types
+        .iter()
+        .filter(|t| t == &&"top_tile".to_string())
+        .count();
     let bucket_tile = types
         .iter()
         .filter(|t| t == &&"bucket_tile".to_string())
@@ -162,7 +165,9 @@ fn ndjson_lite_omits_summary() {
     )
     .expect("ndjson");
     assert!(
-        !lines.iter().any(|line| line.contains("\"type\":\"summary\"")),
+        !lines
+            .iter()
+            .any(|line| line.contains("\"type\":\"summary\"")),
         "summary line should be omitted"
     );
 }
@@ -357,7 +362,9 @@ fn ndjson_compact_omits_summary_even_when_requested() {
     )
     .expect("ndjson");
     assert!(
-        !lines.iter().any(|line| line.contains("\"type\":\"summary\"")),
+        !lines
+            .iter()
+            .any(|line| line.contains("\"type\":\"summary\"")),
         "compact mode should omit summary"
     );
 }

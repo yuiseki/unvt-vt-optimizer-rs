@@ -1,21 +1,21 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 
+use nu_ansi_term::Color;
 use vt_optimizer::cli::{Cli, Command, ReportFormat, TileSortArg};
 use vt_optimizer::format::{plan_copy, plan_optimize, resolve_output_path};
 use vt_optimizer::mbtiles::{
     copy_mbtiles, inspect_mbtiles_with_options, parse_sample_spec, parse_tile_spec,
-    prune_mbtiles_layer_only, simplify_mbtiles_tile, InspectOptions, PruneStats,
-    TileListOptions, TileSort,
+    prune_mbtiles_layer_only, simplify_mbtiles_tile, InspectOptions, PruneStats, TileListOptions,
+    TileSort,
 };
 use vt_optimizer::output::{
     format_bytes, format_histogram_table, format_histograms_by_zoom_section,
     format_metadata_section, ndjson_lines, pad_left, pad_right, resolve_output_format,
 };
-use nu_ansi_term::Color;
 use vt_optimizer::pmtiles::{
-    inspect_pmtiles_with_options, mbtiles_to_pmtiles, pmtiles_to_mbtiles,
-    prune_pmtiles_layer_only, simplify_pmtiles_tile,
+    inspect_pmtiles_with_options, mbtiles_to_pmtiles, pmtiles_to_mbtiles, prune_pmtiles_layer_only,
+    simplify_pmtiles_tile,
 };
 use vt_optimizer::style::read_style;
 
@@ -90,16 +90,28 @@ fn main() -> Result<()> {
             let _output_path =
                 resolve_output_path(&args.input, args.output.as_deref(), decision.output);
             match (decision.input, decision.output) {
-                (vt_optimizer::format::TileFormat::Mbtiles, vt_optimizer::format::TileFormat::Mbtiles) => {
+                (
+                    vt_optimizer::format::TileFormat::Mbtiles,
+                    vt_optimizer::format::TileFormat::Mbtiles,
+                ) => {
                     copy_mbtiles(&args.input, &_output_path)?;
                 }
-                (vt_optimizer::format::TileFormat::Mbtiles, vt_optimizer::format::TileFormat::Pmtiles) => {
+                (
+                    vt_optimizer::format::TileFormat::Mbtiles,
+                    vt_optimizer::format::TileFormat::Pmtiles,
+                ) => {
                     mbtiles_to_pmtiles(&args.input, &_output_path)?;
                 }
-                (vt_optimizer::format::TileFormat::Pmtiles, vt_optimizer::format::TileFormat::Mbtiles) => {
+                (
+                    vt_optimizer::format::TileFormat::Pmtiles,
+                    vt_optimizer::format::TileFormat::Mbtiles,
+                ) => {
                     pmtiles_to_mbtiles(&args.input, &_output_path)?;
                 }
-                (vt_optimizer::format::TileFormat::Pmtiles, vt_optimizer::format::TileFormat::Pmtiles) => {
+                (
+                    vt_optimizer::format::TileFormat::Pmtiles,
+                    vt_optimizer::format::TileFormat::Pmtiles,
+                ) => {
                     anyhow::bail!("v0.0.3 does not support PMTiles to PMTiles copy");
                 }
             }
@@ -140,44 +152,44 @@ fn main() -> Result<()> {
                         layer: cli.layer.clone(),
                         tolerance: cli.tolerance,
                     };
-                    let input_format =
-                        vt_optimizer::format::TileFormat::from_extension(&args.input)
-                            .ok_or_else(|| anyhow::anyhow!("cannot infer input format from path"))?;
+                    let input_format = vt_optimizer::format::TileFormat::from_extension(
+                        &args.input,
+                    )
+                    .ok_or_else(|| anyhow::anyhow!("cannot infer input format from path"))?;
                     let coord = vt_optimizer::mbtiles::TileCoord {
                         zoom: args.z,
                         x: args.x,
                         y: args.y,
                     };
-                    let (output, stats) = match input_format {
-                        vt_optimizer::format::TileFormat::Mbtiles => {
-                            let output = args
-                                .output
-                                .clone()
-                                .unwrap_or_else(|| args.input.with_extension("simplified.mbtiles"));
-                            let stats = simplify_mbtiles_tile(
-                                &args.input,
-                                &output,
-                                coord,
-                                &args.layer,
-                                args.tolerance,
-                            )?;
-                            (output, stats)
-                        }
-                        vt_optimizer::format::TileFormat::Pmtiles => {
-                            let output = args
-                                .output
-                                .clone()
-                                .unwrap_or_else(|| args.input.with_extension("simplified.pmtiles"));
-                            let stats = simplify_pmtiles_tile(
-                                &args.input,
-                                &output,
-                                coord,
-                                &args.layer,
-                                args.tolerance,
-                            )?;
-                            (output, stats)
-                        }
-                    };
+                    let (output, stats) =
+                        match input_format {
+                            vt_optimizer::format::TileFormat::Mbtiles => {
+                                let output = args.output.clone().unwrap_or_else(|| {
+                                    args.input.with_extension("simplified.mbtiles")
+                                });
+                                let stats = simplify_mbtiles_tile(
+                                    &args.input,
+                                    &output,
+                                    coord,
+                                    &args.layer,
+                                    args.tolerance,
+                                )?;
+                                (output, stats)
+                            }
+                            vt_optimizer::format::TileFormat::Pmtiles => {
+                                let output = args.output.clone().unwrap_or_else(|| {
+                                    args.input.with_extension("simplified.pmtiles")
+                                });
+                                let stats = simplify_pmtiles_tile(
+                                    &args.input,
+                                    &output,
+                                    coord,
+                                    &args.layer,
+                                    args.tolerance,
+                                )?;
+                                (output, stats)
+                            }
+                        };
                     println!(
                         "simplify: input={} output={} z={} x={} y={} features={} vertices={}=>{}",
                         args.input.display(),
@@ -244,9 +256,8 @@ fn main() -> Result<()> {
 }
 
 fn init_tracing(level: &str) {
-    let filter = tracing_subscriber::EnvFilter::try_new(level).unwrap_or_else(|_| {
-        tracing_subscriber::EnvFilter::new("info")
-    });
+    let filter = tracing_subscriber::EnvFilter::try_new(level)
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
@@ -284,7 +295,11 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
         args.topn
     };
     let (sample, topn, histogram_buckets) = if args.fast {
-        (Some(vt_optimizer::mbtiles::SampleSpec::Ratio(0.1)), Some(5), 10)
+        (
+            Some(vt_optimizer::mbtiles::SampleSpec::Ratio(0.1)),
+            Some(5),
+            10,
+        )
     } else {
         (sample, topn, args.histogram_buckets as usize)
     };
@@ -553,9 +568,7 @@ fn run_optimize(args: vt_optimizer::cli::OptimizeArgs) -> Result<()> {
         && args.style_mode != vt_optimizer::cli::StyleMode::LayerFilter
         && args.style_mode != vt_optimizer::cli::StyleMode::VtCompat
     {
-        anyhow::bail!(
-            "v0.0.55 only supports --style-mode layer, layer+filter, or vt-compat"
-        );
+        anyhow::bail!("v0.0.55 only supports --style-mode layer, layer+filter, or vt-compat");
     }
     println!("Prune steps");
     println!("- Parsing style file");
@@ -564,16 +577,14 @@ fn run_optimize(args: vt_optimizer::cli::OptimizeArgs) -> Result<()> {
         (vt_optimizer::format::TileFormat::Mbtiles, vt_optimizer::format::TileFormat::Mbtiles) => {
             let apply_filters = args.style_mode == vt_optimizer::cli::StyleMode::LayerFilter;
             println!("- Processing tiles");
-            let stats =
-                prune_mbtiles_layer_only(&args.input, &output_path, &style, apply_filters)?;
+            let stats = prune_mbtiles_layer_only(&args.input, &output_path, &style, apply_filters)?;
             println!("- Writing output file to {}", output_path.display());
             print_prune_summary(&stats);
         }
         (vt_optimizer::format::TileFormat::Pmtiles, vt_optimizer::format::TileFormat::Pmtiles) => {
             let apply_filters = args.style_mode == vt_optimizer::cli::StyleMode::LayerFilter;
             println!("- Processing tiles");
-            let stats =
-                prune_pmtiles_layer_only(&args.input, &output_path, &style, apply_filters)?;
+            let stats = prune_pmtiles_layer_only(&args.input, &output_path, &style, apply_filters)?;
             println!("- Writing output file to {}", output_path.display());
             print_prune_summary(&stats);
         }

@@ -1,20 +1,22 @@
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
-use std::path::Path;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use geo_types::{Coord, Geometry, Line, LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon};
+use geo_types::{
+    Coord, Geometry, Line, LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon,
+};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use mvt::{GeomData, GeomEncoder, GeomType, Tile};
 use mvt_reader::Reader;
-use tracing::warn;
 use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
+use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MbtilesStats {
@@ -143,6 +145,7 @@ pub struct InspectOptions {
     pub list_tiles: Option<TileListOptions>,
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for InspectOptions {
     fn default() -> Self {
         Self {
@@ -254,9 +257,7 @@ pub(crate) fn encode_tile_payload(data: &[u8], gzip: bool) -> Result<Vec<u8>> {
         return Ok(data.to_vec());
     }
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder
-        .write_all(data)
-        .context("encode gzip tile data")?;
+    encoder.write_all(data).context("encode gzip tile data")?;
     let encoded = encoder.finish().context("finish gzip tile data")?;
     Ok(encoded)
 }
@@ -266,7 +267,9 @@ pub(crate) fn count_vertices(geometry: &geo_types::Geometry<f32>) -> usize {
         geo_types::Geometry::Point(_) => 1,
         geo_types::Geometry::MultiPoint(points) => points.len(),
         geo_types::Geometry::LineString(line) => ring_coords(line).len(),
-        geo_types::Geometry::MultiLineString(lines) => lines.iter().map(|l| ring_coords(l).len()).sum(),
+        geo_types::Geometry::MultiLineString(lines) => {
+            lines.iter().map(|l| ring_coords(l).len()).sum()
+        }
         geo_types::Geometry::Line(_) => 2,
         geo_types::Geometry::Polygon(polygon) => {
             let mut count = ring_coords(polygon.exterior()).len();
@@ -288,10 +291,7 @@ pub(crate) fn count_vertices(geometry: &geo_types::Geometry<f32>) -> usize {
         geo_types::Geometry::Rect(_rect) => 4,
         geo_types::Geometry::Triangle(_) => 3,
         geo_types::Geometry::GeometryCollection(collection) => {
-            collection
-                .iter()
-                .map(|geom| count_vertices(geom))
-                .sum()
+            collection.iter().map(count_vertices).sum()
         }
     }
 }
@@ -400,7 +400,8 @@ fn encode_geometry(geometry: &Geometry<f32>) -> Result<GeomData> {
         Geometry::MultiPolygon(MultiPolygon(polygons)) => {
             let mut encoder = GeomEncoder::new(GeomType::Polygon);
             for (poly_idx, polygon) in polygons.iter().enumerate() {
-                let mut rings: Vec<&LineString<f32>> = Vec::with_capacity(1 + polygon.interiors().len());
+                let mut rings: Vec<&LineString<f32>> =
+                    Vec::with_capacity(1 + polygon.interiors().len());
                 rings.push(polygon.exterior());
                 for ring in polygon.interiors() {
                     rings.push(ring);
@@ -486,7 +487,12 @@ pub(crate) fn prune_tile_layers(
         let mut kept_features = 0u64;
         for feature in features {
             if apply_filters {
-                match style.should_keep_feature(&layer.name, zoom, &feature, &mut stats.unknown_filters) {
+                match style.should_keep_feature(
+                    &layer.name,
+                    zoom,
+                    &feature,
+                    &mut stats.unknown_filters,
+                ) {
                     crate::style::FilterResult::True => {}
                     crate::style::FilterResult::Unknown => {
                         stats.record_unknown_layer(&layer.name);
@@ -831,9 +837,7 @@ fn build_file_layer_list(
         "map.zoom_level"
     };
     let query = format!("SELECT {zoom_col}, {data_expr} FROM {source}");
-    let mut stmt = conn
-        .prepare(&query)
-        .context("prepare layer list scan")?;
+    let mut stmt = conn.prepare(&query).context("prepare layer list scan")?;
     let mut rows = stmt.query([]).context("query layer list scan")?;
 
     let mut index: u64 = 0;
@@ -852,8 +856,8 @@ fn build_file_layer_list(
         }
         let data: Vec<u8> = row.get(1)?;
         let payload = decode_tile_payload(&data)?;
-        let reader = Reader::new(payload)
-            .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+        let reader =
+            Reader::new(payload).map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
         let layers = reader
             .get_layer_metadata()
             .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
@@ -873,9 +877,7 @@ fn build_file_layer_list(
                 if let Some(props) = feature.properties {
                     for (key, value) in props {
                         entry.property_keys.insert(key.clone());
-                        entry
-                            .property_values
-                            .insert(format_property_value(&value));
+                        entry.property_values.insert(format_property_value(&value));
                     }
                 }
             }
@@ -909,15 +911,13 @@ fn build_tile_summary(
 ) -> Result<TileSummary> {
     let query = select_tile_data_query(conn)?;
     let data: Vec<u8> = conn
-        .query_row(
-            &query,
-            params![coord.zoom, coord.x, coord.y],
-            |row| row.get(0),
-        )
+        .query_row(&query, params![coord.zoom, coord.x, coord.y], |row| {
+            row.get(0)
+        })
         .context("failed to read tile data")?;
     let payload = decode_tile_payload(&data)?;
-    let reader = Reader::new(payload)
-        .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+    let reader =
+        Reader::new(payload).map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
     let layers = reader
         .get_layer_metadata()
         .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
@@ -1053,9 +1053,8 @@ fn build_histogram_from_sizes(
             accum_bytes as f64 / total_bytes_used as f64
         };
         let avg_over_limit = max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
-        let avg_near_limit = max_tile_bytes > 0
-            && !avg_over_limit
-            && (running_avg as f64) >= limit_threshold;
+        let avg_near_limit =
+            max_tile_bytes > 0 && !avg_over_limit && (running_avg as f64) >= limit_threshold;
         result.push(HistogramBucket {
             min_bytes: b_min,
             max_bytes: b_max,
@@ -1073,6 +1072,7 @@ fn build_histogram_from_sizes(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_histogram(
     path: &Path,
     sample: Option<&SampleSpec>,
@@ -1099,9 +1099,7 @@ fn build_histogram(
         bar
     };
     let query = select_zoom_length_query(&conn)?;
-    let mut stmt = conn
-        .prepare(&query)
-        .context("prepare histogram scan")?;
+    let mut stmt = conn.prepare(&query).context("prepare histogram scan")?;
     let mut rows = stmt.query([]).context("query histogram scan")?;
 
     let range = (max_len - min_len).max(1);
@@ -1182,9 +1180,8 @@ fn build_histogram(
             accum_bytes as f64 / total_bytes_used as f64
         };
         let avg_over_limit = max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
-        let avg_near_limit = max_tile_bytes > 0
-            && !avg_over_limit
-            && (running_avg as f64) >= limit_threshold;
+        let avg_near_limit =
+            max_tile_bytes > 0 && !avg_over_limit && (running_avg as f64) >= limit_threshold;
         result.push(HistogramBucket {
             min_bytes: b_min,
             max_bytes: b_max,
@@ -1202,6 +1199,7 @@ fn build_histogram(
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_zoom_histograms(
     path: &Path,
     sample: Option<&SampleSpec>,
@@ -1282,11 +1280,11 @@ fn build_zoom_histograms(
         accum.used_tiles += 1;
         accum.used_bytes += length;
 
-            if let Some(SampleSpec::Count(limit)) = sample {
-                if accum.used_tiles >= *limit {
-                    // keep scanning other zooms; no-op for this zoom
-                }
+        if let Some(SampleSpec::Count(limit)) = sample {
+            if accum.used_tiles >= *limit {
+                // keep scanning other zooms; no-op for this zoom
             }
+        }
 
         if total_index == 1 || total_index % 1000 == 0 {
             progress.set_position(total_index);
@@ -1336,11 +1334,9 @@ fn build_zoom_histograms(
             } else {
                 accum_bytes as f64 / accum.used_bytes as f64
             };
-            let avg_over_limit =
-                max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
-            let avg_near_limit = max_tile_bytes > 0
-                && !avg_over_limit
-                && (running_avg as f64) >= limit_threshold;
+            let avg_over_limit = max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
+            let avg_near_limit =
+                max_tile_bytes > 0 && !avg_over_limit && (running_avg as f64) >= limit_threshold;
             buckets_vec.push(HistogramBucket {
                 min_bytes: b_min,
                 max_bytes: b_max,
@@ -1397,9 +1393,7 @@ fn fetch_zoom_counts(conn: &Connection) -> Result<BTreeMap<u8, u64>> {
     } else {
         "map.zoom_level"
     };
-    let query = format!(
-        "SELECT {zoom_col}, COUNT(*) FROM {source} GROUP BY {zoom_col}",
-    );
+    let query = format!("SELECT {zoom_col}, COUNT(*) FROM {source} GROUP BY {zoom_col}",);
     let mut stmt = conn.prepare(&query).context("prepare zoom counts")?;
     let mut rows = stmt.query([]).context("query zoom counts")?;
     let mut counts = BTreeMap::new();
@@ -1474,9 +1468,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
     };
 
     let tile_summary = if options.summary {
-        let coord = options
-            .tile
-            .context("--summary requires --tile z/x/y")?;
+        let coord = options.tile.context("--summary requires --tile z/x/y")?;
         Some(build_tile_summary(&conn, coord, options.layer.as_deref())?)
     } else {
         None
@@ -1532,18 +1524,12 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
 
     // Collect layer information from sampled tiles
     let collect_layers = options.sample.is_some() && options.include_layer_list;
-    let mut layer_accums: BTreeMap<String, LayerAccum> = if collect_layers {
-        BTreeMap::new()
-    } else {
-        BTreeMap::new()  // Will remain empty
-    };
+    let mut layer_accums: BTreeMap<String, LayerAccum> = BTreeMap::new();
 
     // When sampling and need layer list, fetch tile_data too for layer extraction
     let need_tile_data = collect_layers;
     let query = select_tiles_query(&conn, need_tile_data)?;
-    let mut stmt = conn
-        .prepare(&query)
-        .context("prepare tiles scan")?;
+    let mut stmt = conn.prepare(&query).context("prepare tiles scan")?;
     let mut rows = stmt.query([]).context("query tiles scan")?;
 
     while let Some(row) = rows.next().context("read tile row")? {
@@ -1607,16 +1593,20 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
                     if let Ok(reader) = Reader::new(payload) {
                         if let Ok(layers) = reader.get_layer_metadata() {
                             for layer in layers {
-                                let entry = layer_accums.entry(layer.name.clone()).or_insert_with(|| LayerAccum {
-                                    feature_count: 0,
-                                    vertex_count: 0,
-                                    property_keys: HashSet::new(),
-                                    property_values: HashSet::new(),
-                                });
+                                let entry =
+                                    layer_accums.entry(layer.name.clone()).or_insert_with(|| {
+                                        LayerAccum {
+                                            feature_count: 0,
+                                            vertex_count: 0,
+                                            property_keys: HashSet::new(),
+                                            property_values: HashSet::new(),
+                                        }
+                                    });
                                 entry.feature_count += layer.feature_count as u64;
                                 if let Ok(features) = reader.get_features(layer.layer_index) {
                                     for feature in features {
-                                        entry.vertex_count += count_vertices(&feature.geometry) as u64;
+                                        entry.vertex_count +=
+                                            count_vertices(&feature.geometry) as u64;
                                         if let Some(props) = feature.properties {
                                             for (key, value) in props {
                                                 entry.property_keys.insert(key.clone());
@@ -1643,12 +1633,9 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
             if let (Some(bucket_index), Some(list_options)) =
                 (options.bucket, options.list_tiles.as_ref())
             {
-                if let Some(bucket_idx) = histogram_bucket_index(
-                    length,
-                    min_len,
-                    max_len,
-                    options.histogram_buckets,
-                ) {
+                if let Some(bucket_idx) =
+                    histogram_bucket_index(length, min_len, max_len, options.histogram_buckets)
+                {
                     if bucket_idx == bucket_index {
                         bucket_tiles.push(TopTile {
                             zoom,
@@ -1660,9 +1647,8 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
                             if list_options.sort == TileSort::Size {
                                 bucket_tiles.sort_by(|a, b| b.bytes.cmp(&a.bytes));
                             } else {
-                                bucket_tiles.sort_by(|a, b| {
-                                    (a.zoom, a.x, a.y).cmp(&(b.zoom, b.x, b.y))
-                                });
+                                bucket_tiles
+                                    .sort_by(|a, b| (a.zoom, a.x, a.y).cmp(&(b.zoom, b.x, b.y)));
                             }
                             bucket_tiles.truncate(list_options.limit);
                         }
@@ -1718,12 +1704,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
 
     let mut top_tiles = top_heap
         .into_iter()
-        .map(|Reverse((bytes, zoom, x, y))| TopTile {
-            zoom,
-            x,
-            y,
-            bytes,
-        })
+        .map(|Reverse((bytes, zoom, x, y))| TopTile { zoom, x, y, bytes })
         .collect::<Vec<_>>();
     top_tiles.sort_by(|a, b| b.bytes.cmp(&a.bytes));
 
@@ -1781,21 +1762,22 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
         Vec::new()
     };
 
-    let histograms_by_zoom = if options.histogram_buckets > 0 && options.zoom.is_none() && options.sample.is_none() {
-        let zoom_counts = zoom_counts.as_ref().expect("zoom counts");
-        build_zoom_histograms(
-            path,
-            options.sample.as_ref(),
-            zoom_counts,
-            &zoom_minmax,
-            options.histogram_buckets,
-            options.max_tile_bytes,
-            options.no_progress,
-            total_tiles,
-        )?
-    } else {
-        Vec::new()
-    };
+    let histograms_by_zoom =
+        if options.histogram_buckets > 0 && options.zoom.is_none() && options.sample.is_none() {
+            let zoom_counts = zoom_counts.as_ref().expect("zoom counts");
+            build_zoom_histograms(
+                path,
+                options.sample.as_ref(),
+                zoom_counts,
+                &zoom_minmax,
+                options.histogram_buckets,
+                options.max_tile_bytes,
+                options.no_progress,
+                total_tiles,
+            )?
+        } else {
+            Vec::new()
+        };
 
     let bucket_count = options
         .bucket
@@ -1998,9 +1980,7 @@ fn select_tiles_query(conn: &Connection, with_data: bool) -> Result<String> {
             "SELECT {zoom_col}, {x_col}, {y_col}, LENGTH({data_expr}), {data_expr} FROM {source}",
         )
     } else {
-        format!(
-            "SELECT {zoom_col}, {x_col}, {y_col}, LENGTH({data_expr}) FROM {source}",
-        )
+        format!("SELECT {zoom_col}, {x_col}, {y_col}, LENGTH({data_expr}) FROM {source}",)
     };
     Ok(select)
 }
@@ -2057,7 +2037,9 @@ pub fn copy_mbtiles(input: &Path, output: &Path) -> Result<()> {
     let schema_mode = tiles_schema_mode(&input_conn)?;
     create_output_schema(&output_conn, schema_mode)?;
 
-    let tx = output_conn.transaction().context("begin output transaction")?;
+    let tx = output_conn
+        .transaction()
+        .context("begin output transaction")?;
 
     {
         let mut stmt = input_conn
@@ -2173,7 +2155,9 @@ pub fn prune_mbtiles_layer_only(
     let schema_mode = tiles_schema_mode(&input_conn)?;
     create_output_schema(&output_conn, schema_mode)?;
 
-    let tx = output_conn.transaction().context("begin output transaction")?;
+    let tx = output_conn
+        .transaction()
+        .context("begin output transaction")?;
 
     let mut meta_stmt = input_conn
         .prepare("SELECT name, value FROM metadata")
@@ -2263,7 +2247,10 @@ pub fn prune_mbtiles_layer_only(
 
     tx.commit().context("commit output")?;
     if apply_filters && stats.unknown_filters > 0 {
-        warn!(count = stats.unknown_filters, "unknown filter expressions encountered");
+        warn!(
+            count = stats.unknown_filters,
+            "unknown filter expressions encountered"
+        );
     }
     Ok(stats)
 }
@@ -2278,10 +2265,10 @@ pub fn simplify_mbtiles_tile(
     ensure_mbtiles_path(input)?;
     ensure_mbtiles_path(output)?;
 
-    let input_conn =
-        Connection::open(input).with_context(|| format!("failed to open input mbtiles: {}", input.display()))?;
-    let output_conn =
-        Connection::open(output).with_context(|| format!("failed to open output mbtiles: {}", output.display()))?;
+    let input_conn = Connection::open(input)
+        .with_context(|| format!("failed to open input mbtiles: {}", input.display()))?;
+    let output_conn = Connection::open(output)
+        .with_context(|| format!("failed to open output mbtiles: {}", output.display()))?;
 
     let schema_mode = tiles_schema_mode(&input_conn)?;
     create_output_schema(&output_conn, schema_mode)?;
@@ -2302,7 +2289,12 @@ pub fn simplify_mbtiles_tile(
     }
 
     let Some(data) = fetch_tile_data(&input_conn, coord)? else {
-        anyhow::bail!("tile not found: z={} x={} y={}", coord.zoom, coord.x, coord.y);
+        anyhow::bail!(
+            "tile not found: z={} x={} y={}",
+            coord.zoom,
+            coord.x,
+            coord.y
+        );
     };
     let is_gzip = data.starts_with(&[0x1f, 0x8b]);
     let payload = decode_tile_payload(&data)?;

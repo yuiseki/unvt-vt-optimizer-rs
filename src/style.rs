@@ -53,22 +53,22 @@ struct MapboxStyleLayer {
 
 impl MapboxStyleLayer {
     fn is_visible_on_zoom(&self, zoom: u8) -> bool {
-        self.check_layout_visibility() && self.check_zoom_underflow(zoom) && self.check_zoom_overflow(zoom)
+        self.check_layout_visibility()
+            && self.check_zoom_underflow(zoom)
+            && self.check_zoom_overflow(zoom)
     }
 
     fn check_layout_visibility(&self) -> bool {
-        match self.visibility.as_deref() {
-            Some("none") => false,
-            _ => true,
-        }
+        !matches!(self.visibility.as_deref(), Some("none"))
     }
 
     fn check_zoom_underflow(&self, zoom: u8) -> bool {
-        self.minzoom.map_or(true, |minzoom| (zoom as f64) >= minzoom)
+        self.minzoom
+            .is_none_or(|minzoom| (zoom as f64) >= minzoom)
     }
 
     fn check_zoom_overflow(&self, zoom: u8) -> bool {
-        self.maxzoom.map_or(true, |maxzoom| maxzoom > (zoom as f64))
+        self.maxzoom.is_none_or(|maxzoom| maxzoom > (zoom as f64))
     }
 
     fn is_rendered(&self, zoom: u8) -> bool {
@@ -102,9 +102,9 @@ impl MapboxStyle {
         self.layers_by_source_layer
             .get(layer_name)
             .map(|layers| {
-                layers.iter().any(|layer| {
-                    layer.is_visible_on_zoom(zoom) && layer.is_rendered(zoom)
-                })
+                layers
+                    .iter()
+                    .any(|layer| layer.is_visible_on_zoom(zoom) && layer.is_rendered(zoom))
             })
             .unwrap_or(false)
     }
@@ -345,7 +345,10 @@ fn feature_type(feature: &mvt_reader::feature::Feature) -> &'static str {
     match feature.geometry {
         Geometry::Point(_) | Geometry::MultiPoint(_) => "Point",
         Geometry::LineString(_) | Geometry::MultiLineString(_) | Geometry::Line(_) => "LineString",
-        Geometry::Polygon(_) | Geometry::MultiPolygon(_) | Geometry::Rect(_) | Geometry::Triangle(_) => "Polygon",
+        Geometry::Polygon(_)
+        | Geometry::MultiPolygon(_)
+        | Geometry::Rect(_)
+        | Geometry::Triangle(_) => "Polygon",
         Geometry::GeometryCollection(_) => "Unknown",
     }
 }
@@ -587,11 +590,7 @@ fn expr_from_key(key: FilterKey) -> Expr {
     }
 }
 
-fn eval_expr(
-    expr: &Expr,
-    feature: &mvt_reader::feature::Feature,
-    zoom: u8,
-) -> Option<FilterValue> {
+fn eval_expr(expr: &Expr, feature: &mvt_reader::feature::Feature, zoom: u8) -> Option<FilterValue> {
     match expr {
         Expr::Literal(value) => Some(value.clone()),
         Expr::Get(name) => feature_value_by_key(feature, &FilterKey::Property(name.clone()), zoom),

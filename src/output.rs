@@ -243,8 +243,8 @@ pub fn format_histograms_by_zoom_section(histograms: &[ZoomHistogram]) -> Vec<St
         let buckets = item
             .buckets
             .iter()
+            .filter(|&bucket| bucket.count > 0)
             .cloned()
-            .filter(|bucket| bucket.count > 0)
             .collect::<Vec<_>>();
         if buckets.is_empty() {
             continue;

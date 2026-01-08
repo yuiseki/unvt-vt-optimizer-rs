@@ -3,7 +3,9 @@ use std::path::Path;
 use mvt::{GeomEncoder, GeomType, Tile};
 use mvt_reader::Reader;
 use vt_optimizer::mbtiles::{simplify_mbtiles_tile, InspectOptions, TileCoord};
-use vt_optimizer::pmtiles::{inspect_pmtiles_with_options, mbtiles_to_pmtiles, simplify_pmtiles_tile};
+use vt_optimizer::pmtiles::{
+    inspect_pmtiles_with_options, mbtiles_to_pmtiles, simplify_pmtiles_tile,
+};
 
 fn create_layer_tile() -> Vec<u8> {
     let mut tile = Tile::new(4096);
@@ -109,9 +111,12 @@ fn simplify_mbtiles_tile_filters_layers() {
     let output = dir.path().join("output.mbtiles");
     create_layer_mbtiles(&input);
 
-    let coord = TileCoord { zoom: 0, x: 0, y: 0 };
-    simplify_mbtiles_tile(&input, &output, coord, &["roads".to_string()], None)
-        .expect("simplify");
+    let coord = TileCoord {
+        zoom: 0,
+        x: 0,
+        y: 0,
+    };
+    simplify_mbtiles_tile(&input, &output, coord, &["roads".to_string()], None).expect("simplify");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn
@@ -134,7 +139,11 @@ fn simplify_mbtiles_tile_keeps_all_layers_when_empty() {
     let output = dir.path().join("output.mbtiles");
     create_layer_mbtiles(&input);
 
-    let coord = TileCoord { zoom: 0, x: 0, y: 0 };
+    let coord = TileCoord {
+        zoom: 0,
+        x: 0,
+        y: 0,
+    };
     simplify_mbtiles_tile(&input, &output, coord, &[], None).expect("simplify");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
@@ -160,7 +169,11 @@ fn simplify_mbtiles_tile_applies_tolerance() {
     let output = dir.path().join("output.mbtiles");
     create_line_mbtiles(&input);
 
-    let coord = TileCoord { zoom: 0, x: 0, y: 0 };
+    let coord = TileCoord {
+        zoom: 0,
+        x: 0,
+        y: 0,
+    };
     simplify_mbtiles_tile(&input, &output, coord, &[], Some(0.5)).expect("simplify");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
@@ -190,9 +203,14 @@ fn simplify_pmtiles_tile_outputs_single_tile() {
     create_layer_mbtiles(&mbtiles);
     mbtiles_to_pmtiles(&mbtiles, &pmtiles).expect("to pmtiles");
 
-    let coord = TileCoord { zoom: 0, x: 0, y: 0 };
+    let coord = TileCoord {
+        zoom: 0,
+        x: 0,
+        y: 0,
+    };
     simplify_pmtiles_tile(&pmtiles, &output, coord, &[], None).expect("simplify");
 
-    let report = inspect_pmtiles_with_options(&output, &InspectOptions::default()).expect("inspect");
+    let report =
+        inspect_pmtiles_with_options(&output, &InspectOptions::default()).expect("inspect");
     assert_eq!(report.overall.tile_count, 1);
 }

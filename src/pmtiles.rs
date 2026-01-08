@@ -5,9 +5,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use brotli::{CompressorWriter, Decompressor};
+use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use flate2::read::GzDecoder;
 use hilbert_2d::{h2xy_discrete, xy2h_discrete, Variant};
 use mvt_reader::Reader;
 use rusqlite::Connection;
@@ -210,12 +210,15 @@ fn encode_directory(entries: &[Entry]) -> Result<Vec<u8>> {
 
 fn decode_directory(mut data: &[u8]) -> Result<Vec<Entry>> {
     let n_entries = data.read_usize_varint()?;
-    let mut entries = vec![Entry {
-        tile_id: 0,
-        offset: 0,
-        length: 0,
-        run_length: 0,
-    }; n_entries];
+    let mut entries = vec![
+        Entry {
+            tile_id: 0,
+            offset: 0,
+            length: 0,
+            run_length: 0,
+        };
+        n_entries
+    ];
 
     let mut next_tile_id = 0u64;
     for entry in entries.iter_mut() {
@@ -281,6 +284,7 @@ fn build_header(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_header_with_metadata(
     root_length: u64,
     metadata_length: u64,
@@ -375,16 +379,14 @@ fn write_header(mut file: &File, header: &Header) -> Result<()> {
         anyhow::bail!("invalid header size: {}", buf.len());
     }
 
-    file.seek(SeekFrom::Start(0))
-        .context("seek header")?;
+    file.seek(SeekFrom::Start(0)).context("seek header")?;
     file.write_all(&buf).context("write header")?;
     Ok(())
 }
 
 fn read_header(mut file: &File) -> Result<Header> {
     let mut buf = vec![0u8; HEADER_SIZE];
-    file.seek(SeekFrom::Start(0))
-        .context("seek header")?;
+    file.seek(SeekFrom::Start(0)).context("seek header")?;
     file.read_exact(&mut buf).context("read header")?;
 
     if &buf[0..MAGIC.len()] != MAGIC {
@@ -584,9 +586,7 @@ fn encode_tile_payload_pmtiles(data: &[u8], tile_compression: u8) -> Result<Vec<
             let mut compressed = Vec::new();
             {
                 let mut writer = CompressorWriter::new(&mut compressed, 4096, 5, 22);
-                writer
-                    .write_all(data)
-                    .context("encode brotli tile data")?;
+                writer.write_all(data).context("encode brotli tile data")?;
             }
             Ok(compressed)
         }
@@ -611,6 +611,7 @@ fn read_directory_section(
     decode_directory(&decoded)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn accumulate_tile_counts(
     file: &File,
     header: &Header,
@@ -656,11 +657,14 @@ fn accumulate_tile_counts(
                 }
             }
             overall.add_tile(length);
-            by_zoom.entry(z).or_insert_with(|| StatAccum {
-                tile_count: 0,
-                total_bytes: 0,
-                max_bytes: 0,
-            }).add_tile(length);
+            by_zoom
+                .entry(z)
+                .or_insert_with(|| StatAccum {
+                    tile_count: 0,
+                    total_bytes: 0,
+                    max_bytes: 0,
+                })
+                .add_tile(length);
             if length <= EMPTY_TILE_MAX_BYTES {
                 *empty_tiles += 1;
             }
@@ -678,6 +682,7 @@ fn accumulate_tile_counts(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_histogram_from_entries(
     file: &File,
     header: &Header,
@@ -771,9 +776,8 @@ fn build_histogram_from_entries(
             accum_bytes as f64 / total_bytes_used as f64
         };
         let avg_over_limit = max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
-        let avg_near_limit = max_tile_bytes > 0
-            && !avg_over_limit
-            && (running_avg as f64) >= limit_threshold;
+        let avg_near_limit =
+            max_tile_bytes > 0 && !avg_over_limit && (running_avg as f64) >= limit_threshold;
         result.push(HistogramBucket {
             min_bytes: b_min,
             max_bytes: b_max,
@@ -863,7 +867,8 @@ fn build_zoom_histograms_from_entries(
                 let Some(accum) = accums.get_mut(&z) else {
                     continue;
                 };
-                let mut bucket = ((length.saturating_sub(accum.min_len)) / accum.bucket_size) as usize;
+                let mut bucket =
+                    ((length.saturating_sub(accum.min_len)) / accum.bucket_size) as usize;
                 if bucket >= buckets {
                     bucket = buckets - 1;
                 }
@@ -915,11 +920,9 @@ fn build_zoom_histograms_from_entries(
             } else {
                 accum_bytes as f64 / accum.used_bytes as f64
             };
-            let avg_over_limit =
-                max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
-            let avg_near_limit = max_tile_bytes > 0
-                && !avg_over_limit
-                && (running_avg as f64) >= limit_threshold;
+            let avg_over_limit = max_tile_bytes > 0 && (running_avg as f64) > max_tile_bytes as f64;
+            let avg_near_limit =
+                max_tile_bytes > 0 && !avg_over_limit && (running_avg as f64) >= limit_threshold;
             buckets_vec.push(HistogramBucket {
                 min_bytes: b_min,
                 max_bytes: b_max,
@@ -993,8 +996,8 @@ fn build_file_layer_list_pmtiles(
                 .context("seek tile data")?;
             file.read_exact(&mut data).context("read tile data")?;
             let payload = decode_tile_payload_pmtiles(&data, header.tile_compression)?;
-            let reader = Reader::new(payload)
-                .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+            let reader =
+                Reader::new(payload).map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
             let layers = reader
                 .get_layer_metadata()
                 .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
@@ -1014,9 +1017,7 @@ fn build_file_layer_list_pmtiles(
                     if let Some(props) = feature.properties {
                         for (key, value) in props {
                             entry.property_keys.insert(key.clone());
-                            entry
-                                .property_values
-                                .insert(format_property_value(&value));
+                            entry.property_values.insert(format_property_value(&value));
                         }
                     }
                 }
@@ -1038,15 +1039,19 @@ fn build_file_layer_list_pmtiles(
     Ok(result)
 }
 
-pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Result<MbtilesReport> {
+pub fn inspect_pmtiles_with_options(
+    path: &Path,
+    options: &InspectOptions,
+) -> Result<MbtilesReport> {
     ensure_pmtiles_path(path)?;
     let file = File::open(path)
         .with_context(|| format!("failed to open input pmtiles: {}", path.display()))?;
     let header = read_header(&file).context("read header")?;
     let metadata = read_metadata_section(&file, &header)?;
 
-    let root_entries = read_directory_section(&file, &header, header.root_offset, header.root_length)
-        .context("read root directory")?;
+    let root_entries =
+        read_directory_section(&file, &header, header.root_offset, header.root_length)
+            .context("read root directory")?;
     let mut overall = StatAccum {
         tile_count: 0,
         total_bytes: 0,
@@ -1095,13 +1100,8 @@ pub fn inspect_pmtiles_with_options(path: &Path, options: &InspectOptions) -> Re
         options.histogram_buckets,
         options.max_tile_bytes,
     )?;
-    let file_layers = build_file_layer_list_pmtiles(
-        &file,
-        &header,
-        &root_entries,
-        options,
-        overall.tile_count,
-    )?;
+    let file_layers =
+        build_file_layer_list_pmtiles(&file, &header, &root_entries, options, overall.tile_count)?;
 
     let by_zoom = by_zoom
         .into_iter()
@@ -1187,14 +1187,8 @@ pub fn prune_pmtiles_layer_only(
                 let (z, _x, _y) = tile_id_to_xyz(tile_id);
                 min_zoom = min_zoom.min(z);
                 max_zoom = max_zoom.max(z);
-                let encoded = prune_tile_layers(
-                    &payload,
-                    z,
-                    style,
-                    &keep_layers,
-                    apply_filters,
-                    &mut stats,
-                )?;
+                let encoded =
+                    prune_tile_layers(&payload, z, style, &keep_layers, apply_filters, &mut stats)?;
                 let tile_data = encode_tile_payload_pmtiles(&encoded, header.tile_compression)?;
                 tiles.push((tile_id, tile_data));
             }
@@ -1247,7 +1241,8 @@ pub fn prune_pmtiles_layer_only(
     let mut file = file;
     file.seek(SeekFrom::Start(header.root_offset))
         .context("seek root directory")?;
-    file.write_all(&dir_section).context("write root directory")?;
+    file.write_all(&dir_section)
+        .context("write root directory")?;
 
     if !metadata_bytes.is_empty() {
         file.seek(SeekFrom::Start(header.metadata_offset))
@@ -1312,7 +1307,12 @@ pub fn simplify_pmtiles_tile(
     }
 
     let Some(data) = data else {
-        anyhow::bail!("tile not found: z={} x={} y={}", coord.zoom, coord.x, coord.y);
+        anyhow::bail!(
+            "tile not found: z={} x={} y={}",
+            coord.zoom,
+            coord.x,
+            coord.y
+        );
     };
 
     let payload = decode_tile_payload_pmtiles(&data, header.tile_compression)?;
@@ -1357,7 +1357,8 @@ pub fn simplify_pmtiles_tile(
     let mut file = file;
     file.seek(SeekFrom::Start(header.root_offset))
         .context("seek root directory")?;
-    file.write_all(&dir_section).context("write root directory")?;
+    file.write_all(&dir_section)
+        .context("write root directory")?;
 
     if !metadata_bytes.is_empty() {
         file.seek(SeekFrom::Start(header.metadata_offset))
@@ -1453,7 +1454,8 @@ pub fn pmtiles_to_mbtiles(input: &Path, output: &Path) -> Result<()> {
     file.seek(SeekFrom::Start(header.root_offset))
         .context("seek root directory")?;
     let mut dir_buf = vec![0u8; header.root_length as usize];
-    file.read_exact(&mut dir_buf).context("read root directory")?;
+    file.read_exact(&mut dir_buf)
+        .context("read root directory")?;
     let dir_bytes = decode_internal_bytes(dir_buf, header.internal_compression)?;
     let entries = decode_directory(&dir_bytes)?;
 
@@ -1473,7 +1475,9 @@ pub fn pmtiles_to_mbtiles(input: &Path, output: &Path) -> Result<()> {
         )
         .context("create output schema")?;
 
-    let tx = output_conn.transaction().context("begin output transaction")?;
+    let tx = output_conn
+        .transaction()
+        .context("begin output transaction")?;
 
     for entry in entries {
         let mut data = vec![0u8; entry.length as usize];

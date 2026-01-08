@@ -200,7 +200,9 @@ fn prune_mbtiles_filters_features_by_style() {
     let reader = Reader::new(data).expect("decode");
     let layers = reader.get_layer_metadata().expect("layers");
     assert_eq!(layers.len(), 1);
-    let features = reader.get_features(layers[0].layer_index).expect("features");
+    let features = reader
+        .get_features(layers[0].layer_index)
+        .expect("features");
     assert_eq!(features.len(), 1);
     let props = features[0].properties.as_ref().expect("props");
     assert_eq!(

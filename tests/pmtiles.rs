@@ -9,8 +9,7 @@ use mvt::{GeomEncoder, GeomType, Tile};
 use mvt_reader::Reader;
 use vt_optimizer::mbtiles::{inspect_mbtiles, InspectOptions};
 use vt_optimizer::pmtiles::{
-    inspect_pmtiles_with_options, mbtiles_to_pmtiles, pmtiles_to_mbtiles,
-    prune_pmtiles_layer_only,
+    inspect_pmtiles_with_options, mbtiles_to_pmtiles, pmtiles_to_mbtiles, prune_pmtiles_layer_only,
 };
 use vt_optimizer::style::read_style;
 
@@ -143,10 +142,10 @@ fn write_pmtiles_with_metadata_and_compression(
         root_length,
         metadata_offset,
         metadata_length,
-        0u64, // leaf_offset
-        0u64, // leaf_length
+        0u64,        // leaf_offset
+        0u64,        // leaf_length
         root_offset, // data_offset
-        0u64, // data_length
+        0u64,        // data_length
     ] {
         header.extend_from_slice(&value.to_le_bytes());
     }
@@ -207,26 +206,40 @@ fn inspect_pmtiles_reads_metadata() {
 
     let report = inspect_pmtiles_with_options(&pmtiles, &InspectOptions::default())
         .expect("inspect pmtiles");
-    assert_eq!(report.metadata.get("name").map(String::as_str), Some("sample"));
-    assert_eq!(report.metadata.get("minzoom").map(String::as_str), Some("0"));
-    assert_eq!(report.metadata.get("maxzoom").map(String::as_str), Some("2"));
-    assert_eq!(report.metadata.get("format").map(String::as_str), Some("pbf"));
+    assert_eq!(
+        report.metadata.get("name").map(String::as_str),
+        Some("sample")
+    );
+    assert_eq!(
+        report.metadata.get("minzoom").map(String::as_str),
+        Some("0")
+    );
+    assert_eq!(
+        report.metadata.get("maxzoom").map(String::as_str),
+        Some("2")
+    );
+    assert_eq!(
+        report.metadata.get("format").map(String::as_str),
+        Some("pbf")
+    );
 }
 
 #[test]
 fn inspect_pmtiles_reads_brotli_metadata() {
     let dir = tempfile::tempdir().expect("tempdir");
     let pmtiles = dir.path().join("metadata-brotli.pmtiles");
-    write_pmtiles_with_metadata_and_compression(
-        &pmtiles,
-        r#"{"name":"sample","minzoom":1}"#,
-        2,
-    );
+    write_pmtiles_with_metadata_and_compression(&pmtiles, r#"{"name":"sample","minzoom":1}"#, 2);
 
     let report = inspect_pmtiles_with_options(&pmtiles, &InspectOptions::default())
         .expect("inspect pmtiles");
-    assert_eq!(report.metadata.get("name").map(String::as_str), Some("sample"));
-    assert_eq!(report.metadata.get("minzoom").map(String::as_str), Some("1"));
+    assert_eq!(
+        report.metadata.get("name").map(String::as_str),
+        Some("sample")
+    );
+    assert_eq!(
+        report.metadata.get("minzoom").map(String::as_str),
+        Some("1")
+    );
 }
 
 #[test]
@@ -368,26 +381,20 @@ fn inspect_pmtiles_counts_tiles_by_zoom() {
     assert_eq!(report.overall.max_bytes, 20);
     assert_eq!(report.overall.avg_bytes, 15);
     assert_eq!(report.by_zoom.len(), 2);
-    assert!(report
-        .by_zoom
-        .iter()
-        .any(|entry| {
-            entry.zoom == 0
-                && entry.stats.tile_count == 1
-                && entry.stats.total_bytes == 10
-                && entry.stats.max_bytes == 10
-                && entry.stats.avg_bytes == 10
-        }));
-    assert!(report
-        .by_zoom
-        .iter()
-        .any(|entry| {
-            entry.zoom == 1
-                && entry.stats.tile_count == 1
-                && entry.stats.total_bytes == 20
-                && entry.stats.max_bytes == 20
-                && entry.stats.avg_bytes == 20
-        }));
+    assert!(report.by_zoom.iter().any(|entry| {
+        entry.zoom == 0
+            && entry.stats.tile_count == 1
+            && entry.stats.total_bytes == 10
+            && entry.stats.max_bytes == 10
+            && entry.stats.avg_bytes == 10
+    }));
+    assert!(report.by_zoom.iter().any(|entry| {
+        entry.zoom == 1
+            && entry.stats.tile_count == 1
+            && entry.stats.total_bytes == 20
+            && entry.stats.max_bytes == 20
+            && entry.stats.avg_bytes == 20
+    }));
 }
 
 #[test]
@@ -398,8 +405,10 @@ fn inspect_pmtiles_builds_histograms_by_zoom() {
     create_sample_mbtiles(&input);
 
     mbtiles_to_pmtiles(&input, &pmtiles).expect("mbtiles->pmtiles");
-    let mut options = InspectOptions::default();
-    options.histogram_buckets = 3;
+    let options = InspectOptions {
+        histogram_buckets: 3,
+        ..Default::default()
+    };
     let report = inspect_pmtiles_with_options(&pmtiles, &options).expect("inspect pmtiles");
 
     assert_eq!(report.histograms_by_zoom.len(), 2);
@@ -430,9 +439,11 @@ fn inspect_pmtiles_collects_layer_list() {
     create_layer_mbtiles(&input);
 
     mbtiles_to_pmtiles(&input, &pmtiles).expect("mbtiles->pmtiles");
-    let mut options = InspectOptions::default();
-    options.histogram_buckets = 0;
-    options.include_layer_list = true;
+    let options = InspectOptions {
+        histogram_buckets: 0,
+        include_layer_list: true,
+        ..Default::default()
+    };
     let report = inspect_pmtiles_with_options(&pmtiles, &options).expect("inspect pmtiles");
 
     let mut layers = report.file_layers.clone();
