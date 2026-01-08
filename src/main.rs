@@ -5,7 +5,8 @@ use vt_optimizer::cli::{Cli, Command, ReportFormat, TileSortArg};
 use vt_optimizer::format::{plan_copy, plan_optimize, resolve_output_path};
 use vt_optimizer::mbtiles::{
     copy_mbtiles, inspect_mbtiles_with_options, parse_sample_spec, parse_tile_spec,
-    prune_mbtiles_layer_only, InspectOptions, PruneStats, TileListOptions, TileSort,
+    prune_mbtiles_layer_only, simplify_mbtiles_tile, InspectOptions, PruneStats,
+    TileListOptions, TileSort,
 };
 use vt_optimizer::output::{
     format_bytes, format_histogram_table, format_histograms_by_zoom_section,
@@ -30,7 +31,29 @@ fn main() -> Result<()> {
             run_optimize(args)?;
         }
         Some(Command::Simplify(args)) => {
-            println!("simplify: input={} z={} x={} y={}", args.input.display(), args.z, args.x, args.y);
+            let input_format = vt_optimizer::format::TileFormat::from_extension(&args.input)
+                .ok_or_else(|| anyhow::anyhow!("cannot infer input format from path"))?;
+            if input_format != vt_optimizer::format::TileFormat::Mbtiles {
+                anyhow::bail!("simplify currently supports only .mbtiles input");
+            }
+            let output = args
+                .output
+                .clone()
+                .unwrap_or_else(|| args.input.with_extension("simplified.mbtiles"));
+            let coord = vt_optimizer::mbtiles::TileCoord {
+                zoom: args.z,
+                x: args.x,
+                y: args.y,
+            };
+            simplify_mbtiles_tile(&args.input, &output, coord, &args.layer)?;
+            println!(
+                "simplify: input={} output={} z={} x={} y={}",
+                args.input.display(),
+                output.display(),
+                args.z,
+                args.x,
+                args.y
+            );
         }
         Some(Command::Copy(args)) => {
             let decision = plan_copy(
@@ -92,9 +115,26 @@ fn main() -> Result<()> {
                         layer: cli.layer.clone(),
                         tolerance: cli.tolerance,
                     };
+                    let input_format =
+                        vt_optimizer::format::TileFormat::from_extension(&args.input)
+                            .ok_or_else(|| anyhow::anyhow!("cannot infer input format from path"))?;
+                    if input_format != vt_optimizer::format::TileFormat::Mbtiles {
+                        anyhow::bail!("simplify currently supports only .mbtiles input");
+                    }
+                    let output = args
+                        .output
+                        .clone()
+                        .unwrap_or_else(|| args.input.with_extension("simplified.mbtiles"));
+                    let coord = vt_optimizer::mbtiles::TileCoord {
+                        zoom: args.z,
+                        x: args.x,
+                        y: args.y,
+                    };
+                    simplify_mbtiles_tile(&args.input, &output, coord, &args.layer)?;
                     println!(
-                        "simplify: input={} z={} x={} y={}",
+                        "simplify: input={} output={} z={} x={} y={}",
                         args.input.display(),
+                        output.display(),
                         args.z,
                         args.x,
                         args.y

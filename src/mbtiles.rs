@@ -539,6 +539,88 @@ pub(crate) fn prune_tile_layers(
         .map_err(|err| anyhow::anyhow!("encode vector tile: {err}"))
 }
 
+fn filter_tile_layers(payload: &[u8], keep_layers: &HashSet<String>) -> Result<Vec<u8>> {
+    let reader = Reader::new(payload.to_vec())
+        .map_err(|err| anyhow::anyhow!("decode vector tile: {err}"))?;
+    let layers = reader
+        .get_layer_metadata()
+        .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
+
+    let mut extent = 4096;
+    for layer in layers.iter() {
+        if keep_layers.is_empty() || keep_layers.contains(&layer.name) {
+            extent = layer.extent;
+            break;
+        }
+    }
+
+    let mut tile = Tile::new(extent);
+    for layer in layers {
+        if !keep_layers.is_empty() && !keep_layers.contains(&layer.name) {
+            continue;
+        }
+        let mut layer_builder = tile.create_layer(&layer.name);
+        let features = reader
+            .get_features(layer.layer_index)
+            .map_err(|err| anyhow::anyhow!("read layer features: {err}"))?;
+        for feature in features {
+            let geom_data = encode_geometry(feature.get_geometry())?;
+            let mut feature_builder = layer_builder.into_feature(geom_data);
+            if let Some(id) = feature.id {
+                feature_builder.set_id(id);
+            }
+            if let Some(props) = feature.properties {
+                for (key, value) in props {
+                    match value {
+                        mvt_reader::feature::Value::String(text) => {
+                            feature_builder.add_tag_string(&key, &text);
+                        }
+                        mvt_reader::feature::Value::Float(val) => {
+                            feature_builder.add_tag_float(&key, val);
+                        }
+                        mvt_reader::feature::Value::Double(val) => {
+                            feature_builder.add_tag_double(&key, val);
+                        }
+                        mvt_reader::feature::Value::Int(val) => {
+                            feature_builder.add_tag_int(&key, val);
+                        }
+                        mvt_reader::feature::Value::UInt(val) => {
+                            feature_builder.add_tag_uint(&key, val);
+                        }
+                        mvt_reader::feature::Value::SInt(val) => {
+                            feature_builder.add_tag_sint(&key, val);
+                        }
+                        mvt_reader::feature::Value::Bool(val) => {
+                            feature_builder.add_tag_bool(&key, val);
+                        }
+                        mvt_reader::feature::Value::Null => {}
+                    }
+                }
+            }
+            layer_builder = feature_builder.into_layer();
+        }
+        tile.add_layer(layer_builder)
+            .map_err(|err| anyhow::anyhow!("add layer: {err}"))?;
+    }
+
+    tile.to_bytes()
+        .map_err(|err| anyhow::anyhow!("encode vector tile: {err}"))
+}
+
+fn fetch_tile_data(conn: &Connection, coord: TileCoord) -> Result<Option<Vec<u8>>> {
+    let query = select_tile_data_query(conn)?;
+    let mut stmt = conn.prepare(&query).context("prepare tile data")?;
+    let mut rows = stmt
+        .query(params![coord.zoom, coord.x, coord.y])
+        .context("query tile data")?;
+    if let Some(row) = rows.next().context("read tile row")? {
+        let data: Vec<u8> = row.get(0)?;
+        Ok(Some(data))
+    } else {
+        Ok(None)
+    }
+}
+
 struct LayerAccum {
     feature_count: u64,
     vertex_count: u64,
@@ -1995,4 +2077,75 @@ pub fn prune_mbtiles_layer_only(
         warn!(count = stats.unknown_filters, "unknown filter expressions encountered");
     }
     Ok(stats)
+}
+
+pub fn simplify_mbtiles_tile(
+    input: &Path,
+    output: &Path,
+    coord: TileCoord,
+    layers: &[String],
+) -> Result<()> {
+    ensure_mbtiles_path(input)?;
+    ensure_mbtiles_path(output)?;
+
+    let input_conn =
+        Connection::open(input).with_context(|| format!("failed to open input mbtiles: {}", input.display()))?;
+    let output_conn =
+        Connection::open(output).with_context(|| format!("failed to open output mbtiles: {}", output.display()))?;
+
+    let schema_mode = tiles_schema_mode(&input_conn)?;
+    create_output_schema(&output_conn, schema_mode)?;
+
+    let mut meta_stmt = input_conn
+        .prepare("SELECT name, value FROM metadata")
+        .context("prepare metadata read")?;
+    let mut meta_rows = meta_stmt.query([]).context("query metadata")?;
+    while let Some(row) = meta_rows.next().context("read metadata row")? {
+        let name: String = row.get(0)?;
+        let value: String = row.get(1)?;
+        output_conn
+            .execute(
+                "INSERT INTO metadata (name, value) VALUES (?1, ?2)",
+                params![name, value],
+            )
+            .context("insert metadata")?;
+    }
+
+    let Some(data) = fetch_tile_data(&input_conn, coord)? else {
+        anyhow::bail!("tile not found: z={} x={} y={}", coord.zoom, coord.x, coord.y);
+    };
+    let is_gzip = data.starts_with(&[0x1f, 0x8b]);
+    let payload = decode_tile_payload(&data)?;
+
+    let keep_layers: HashSet<String> = layers.iter().cloned().collect();
+    let filtered = filter_tile_layers(&payload, &keep_layers)?;
+    let encoded = encode_tile_payload(&filtered, is_gzip)?;
+
+    match schema_mode {
+        TilesSchemaMode::Tiles => {
+            output_conn
+                .execute(
+                    "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
+                    (coord.zoom as i64, coord.x as i64, coord.y as i64, encoded),
+                )
+                .context("insert tile")?;
+        }
+        TilesSchemaMode::MapImages => {
+            let tile_id = format!("{}-{}-{}", coord.zoom, coord.x, coord.y);
+            output_conn
+                .execute(
+                    "INSERT INTO map (zoom_level, tile_column, tile_row, tile_id) VALUES (?1, ?2, ?3, ?4)",
+                    (coord.zoom as i64, coord.x as i64, coord.y as i64, tile_id.clone()),
+                )
+                .context("insert map")?;
+            output_conn
+                .execute(
+                    "INSERT INTO images (tile_id, tile_data) VALUES (?1, ?2)",
+                    (tile_id, encoded),
+                )
+                .context("insert image")?;
+        }
+    }
+
+    Ok(())
 }
