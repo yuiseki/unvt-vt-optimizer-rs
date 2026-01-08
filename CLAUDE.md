@@ -176,7 +176,7 @@ The project follows incremental milestones documented in SPEC.md:
 ## References
 
 - **PRD.md**: Product requirements and goals
-- **ARD.md**: Architectural decisions with rationale
+- **ADR.md**: Architectural decisions with rationale
 - **SPEC.md**: Detailed technical specification with milestone breakdown
 - **Mapbox Vector Tile Spec**: https://github.com/mapbox/vector-tile-spec
 - **MBTiles 1.3 Spec**: https://github.com/mapbox/mbtiles-spec

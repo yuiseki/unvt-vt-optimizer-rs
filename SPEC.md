@@ -720,7 +720,7 @@ SQLite については WAL が「reader/writer の同時進行」に寄与し得
 
 * zoom/領域で分割して一時 MBTiles/PMTiles を生成し、最後にマージ
 * 仕様上は “選べる設計” の余地を残すが、初期リリースでは `--plan split-merge` として **実験機能** 扱い
-* ただし checkpoint/restart や失敗局所化の利点があるため、ARD/ADR 側で評価を継続
+* ただし checkpoint/restart や失敗局所化の利点があるため、ADR 側で評価を継続
 
 ---
 

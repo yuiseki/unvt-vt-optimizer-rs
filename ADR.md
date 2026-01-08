@@ -1,8 +1,8 @@
-# ARD.md — Architecture Record (Decisions)
+# ADR.md — Architecture Decision Record
 
 本書は vt-optimizer-rs のアーキテクチャ上の意思決定を記録する。各項目は “現時点の決定” とし、破壊的変更が必要になった場合は追記/改訂する。
 
-## ARD-0001: プロダクト形態（CLI + SDK）
+## ADR-0001: プロダクト形態（CLI + SDK）
 - Status: Accepted
 - Decision:
   - 単一バイナリCLIを主とし、同一コアを SDK（ライブラリ）として提供する。
@@ -11,7 +11,7 @@
 - Consequences:
   - CLI層は薄く、コアはライブラリとして設計する（API安定性が要件化）。
 
-## ARD-0002: 対象フォーマット（MBTiles + PMTiles）
+## ADR-0002: 対象フォーマット（MBTiles + PMTiles）
 - Status: Accepted
 - Decision:
   - 入力: MBTiles / PMTiles v3（まずはv3のみ、必要ならv2読取を追加）
@@ -21,14 +21,14 @@
 - References:
   - MBTiles 1.3, PMTiles v3（別紙SPEC参照）
 
-## ARD-0003: タイル座標の内部表現
+## ADR-0003: タイル座標の内部表現
 - Status: Accepted
 - Decision:
   - 内部表現は XYZ（z/x/y）で統一し、入出力境界で MBTiles の tile_row 規約へ変換する。
 - Rationale:
   - 実装と利用者の理解を単純化し、ミス（Y反転）を境界層に押し込める。
 
-## ARD-0004: スタイル解釈の範囲（filter-only をデフォルト）
+## ADR-0004: スタイル解釈の範囲（filter-only をデフォルト）
 - Status: Accepted
 - Decision:
   - Mapbox + MapLibre の style.json を解釈可能にする。
@@ -40,7 +40,7 @@
   - “削り過ぎ”が最も危険。未対応は保守的に keep し、正確性と安全性を優先。
   - ただしユーザーが引数で挙動を選べる拡張余地を残す。
 
-## ARD-0005: 処理モデル（ストリーミング + 読取り並列 + 単一writer集約）
+## ADR-0005: 処理モデル（ストリーミング + 読取り並列 + 単一writer集約）
 - Status: Accepted
 - Decision:
   - デフォルト実行エンジンは「読取り並列＋単一writer集約」。
@@ -51,7 +51,7 @@
 - Notes:
   - writer 側はバッチ書き込み（一定タイル数/サイズで commit）を採用する。
 
-## ARD-0006: shard エンジン（分割→成果物→マージ）は“実行プラン”として将来追加
+## ADR-0006: shard エンジン（分割→成果物→マージ）は“実行プラン”として将来追加
 - Status: Accepted (Deferred Implementation)
 - Decision:
   - `--engine=shard` のような実行プランとして追加可能な構造にする。
@@ -59,14 +59,14 @@
 - Rationale:
   - 実装/運用の複雑性が増すため、まず本線を成功させる。
 
-## ARD-0007: チェックポイント/再開は sidecar（JSON/SQLite）で実現
+## ADR-0007: チェックポイント/再開は sidecar（JSON/SQLite）で実現
 - Status: Accepted
 - Decision:
   - sidecar（JSON/SQLite）に進捗とオプション、完了範囲を記録し再開を可能にする。
 - Rationale:
   - 入出力ファイルを汚さず、フォーマット差（MBTiles/PMTiles）に依存しない。
 
-## ARD-0008: CLI方針（非対話、古き良きCLI）
+## ADR-0008: CLI方針（非対話、古き良きCLI）
 - Status: Accepted
 - Decision:
   - 対話UIを廃し、サブコマンド + オプションの伝統的CLIとする。
