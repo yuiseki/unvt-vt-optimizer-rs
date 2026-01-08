@@ -1,6 +1,6 @@
 # vt-optimizer-rs
 
-A fast CLI to inspect and prune MBTiles/PMTiles vector tiles. It supports modern Mapbox/MapLibre style filters, PMTiles output, and a `vt-compat` mode that mirrors vt-optimizer layer visibility behavior.
+A fast CLI to inspect and prune MBTiles/PMTiles vector tiles. It supports a vt-optimizer compatible legacy interface, modern Mapbox/MapLibre style filters, PMTiles output, and a `vt-compat` mode that mirrors vt-optimizer layer visibility behavior.
 
 ## Features
 
@@ -22,35 +22,37 @@ cargo build --release
 
 This project ships a `vt-optimizer` CLI. It supports both the modern subcommands and a vt-optimizer compatible legacy interface (no subcommand).
 
+If you want vt-optimizer-style usage, see the Legacy section first.
+
 ### Inspect
 
 ```bash
 # basic summary
-cargo run --quiet -- inspect /path/to/tiles.mbtiles
+vt-optimizer inspect /path/to/tiles.mbtiles
 
 # PMTiles
-cargo run --quiet -- inspect /path/to/tiles.pmtiles
+vt-optimizer inspect /path/to/tiles.pmtiles
 
 # NDJSON output
-cargo run --quiet -- inspect /path/to/tiles.mbtiles --output ndjson
+vt-optimizer inspect /path/to/tiles.mbtiles --output ndjson
 ```
 
 ### Optimize (prune)
 
 ```bash
 # style-based pruning (layer+filter)
-cargo run --quiet -- optimize /path/to/tiles.mbtiles \
+vt-optimizer optimize /path/to/tiles.mbtiles \
   --output /path/to/tiles.pruned.mbtiles \
   --style /path/to/style.json
 
 # vt-optimizer compatible mode (visibility only)
-cargo run --quiet -- optimize /path/to/tiles.mbtiles \
+vt-optimizer optimize /path/to/tiles.mbtiles \
   --output /path/to/tiles.pruned.mbtiles \
   --style /path/to/style.json \
   --style-mode vt-compat
 
 # PMTiles optimize
-cargo run --quiet -- optimize /path/to/tiles.pmtiles \
+vt-optimizer optimize /path/to/tiles.pmtiles \
   --output /path/to/tiles.pruned.pmtiles \
   --style /path/to/style.json
 ```
@@ -58,19 +60,19 @@ cargo run --quiet -- optimize /path/to/tiles.pmtiles \
 ### Copy
 
 ```bash
-cargo run --quiet -- copy /path/to/tiles.mbtiles --output /path/to/tiles.copy.mbtiles
+vt-optimizer copy /path/to/tiles.mbtiles --output /path/to/tiles.copy.mbtiles
 ```
 
 ### Legacy (vt-optimizer compatible)
 
 ```bash
 # optimize (no subcommand)
-cargo run --quiet -- -m /path/to/tiles.mbtiles \
+vt-optimizer -m /path/to/tiles.mbtiles \
   -s /path/to/style.json \
   -o /path/to/tiles.pruned.mbtiles
 
 # inspect a tile summary
-cargo run --quiet -- -m /path/to/tiles.mbtiles -z 10 -x 908 -y 396
+vt-optimizer -m /path/to/tiles.mbtiles -z 10 -x 908 -y 396
 ```
 
 ## Style modes
