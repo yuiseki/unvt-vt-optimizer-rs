@@ -1073,7 +1073,6 @@ fn build_histogram_from_sizes(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[allow(clippy::too_many_arguments)]
 fn build_histogram(
     path: &Path,
     sample: Option<&SampleSpec>,
@@ -1134,7 +1133,7 @@ fn build_histogram(
             }
         }
 
-        if index == 1 || index % 1000 == 0 {
+        if index == 1 || index.is_multiple_of(1000) {
             progress.set_position(index);
         }
     }
@@ -1287,7 +1286,7 @@ fn build_zoom_histograms(
             }
         }
 
-        if total_index == 1 || total_index % 1000 == 0 {
+        if total_index == 1 || total_index.is_multiple_of(1000) {
             progress.set_position(total_index);
         }
     }
@@ -1665,7 +1664,7 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
             }
         }
 
-        if processed == 1 || processed % 100 == 0 {
+        if processed == 1 || processed.is_multiple_of(100) {
             progress.set_position(processed);
         }
     }
