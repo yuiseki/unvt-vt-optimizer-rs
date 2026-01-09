@@ -2,6 +2,8 @@
 
 A fast CLI to inspect and optimize MBTiles/PMTiles vector tiles. It supports a vt-optimizer compatible legacy interface, modern Mapbox/MapLibre style filters, PMTiles output, and a `vt-compat` mode that mirrors vt-optimizer layer visibility behavior.
 
+This project is inspired by and aims to be compatible with ibesora's vt-optimizer. See the original project for reference: https://github.com/ibesora/vt-optimizer
+
 ## Features
 
 - Inspect MBTiles/PMTiles with histograms, layer stats, and summaries
