@@ -64,4 +64,11 @@ inspect-pmtiles: ## Inspect PMTiles file (requires PMTILES_PATH in .env)
 	fi
 	cargo run -- inspect $(PMTILES_PATH)
 
+optimize-mbtiles: ## Optimize MBTiles file (requires MBTILES_PATH in .env)
+	@if [ -z "$(MBTILES_PATH)" ]; then \
+		echo "Error: MBTILES_PATH is not set. Please set it in .env file"; \
+		exit 1; \
+	fi
+	cargo run -- optimize $(MBTILES_PATH) --style $(STYLE_PATH) --output $(OUTPUT_MBTILES_PATH)
+
 .DEFAULT_GOAL := help
