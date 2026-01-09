@@ -751,6 +751,7 @@ fn simplify_radial_dist(points: &[Coord<f32>], sq_tolerance: f32) -> Vec<Coord<f
     out
 }
 
+// Ramer–Douglas–Peucker algorithm
 fn simplify_douglas_peucker(points: &[Coord<f32>], sq_tolerance: f32) -> Vec<Coord<f32>> {
     let last = points.len() - 1;
     let mut simplified = vec![points[0]];
