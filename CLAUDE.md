@@ -123,7 +123,7 @@ Style modes (via `--style-mode`):
 
 ## Development Milestones
 
-The project follows incremental milestones documented in SPEC.md:
+The project follows incremental milestones documented in docs/SPEC.md:
 - **v0.0.1-v0.0.2**: CLI skeleton and basic MBTiles copy/inspect
 - **v0.0.3**: Cross-format copy (MBTiles ↔ PMTiles)
 - **v0.0.4-v0.0.30**: Progressive enhancements to inspect command (sampling, histograms, layer analysis, progress indicators)
@@ -177,7 +177,7 @@ The project follows incremental milestones documented in SPEC.md:
 
 - **PRD.md**: Product requirements and goals
 - **ADR.md**: Architectural decisions with rationale
-- **SPEC.md**: Detailed technical specification with milestone breakdown
+- **docs/SPEC.md**: Detailed technical specification with milestone breakdown
 - **Mapbox Vector Tile Spec**: https://github.com/mapbox/vector-tile-spec
 - **MBTiles 1.3 Spec**: https://github.com/mapbox/mbtiles-spec
 - **PMTiles v3 Spec**: https://github.com/protomaps/PMTiles
