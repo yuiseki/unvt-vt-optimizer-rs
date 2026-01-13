@@ -84,7 +84,7 @@ pub struct InspectArgs {
     pub output: ReportFormat,
 
     /// Limit output sections (comma-separated). See error output for allowed values.
-    #[arg(long)]
+    #[arg(long, num_args = 0..=1, default_missing_value = "")]
     pub stats: Option<String>,
 
     /// Disable the progress bar.
