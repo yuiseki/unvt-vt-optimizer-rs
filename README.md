@@ -5,6 +5,7 @@ A fast CLI to inspect and optimize MBTiles/PMTiles vector tiles. It supports a v
 This project is inspired by and aims to be compatible with ibesora's vt-optimizer. See the original project for reference: https://github.com/ibesora/vt-optimizer
 
 vt-optimizer-rs provides rich CLI options so humans and AI can quickly and deeply inspect vector tiles and optimize them.
+See [docs/HOW_TO.md](docs/HOW_TO.md).
 
 ## Features
 
@@ -125,11 +126,11 @@ vt-optimizer-rs is intended for public-interest geospatial workflows, including 
 
 ## DPG documentation links
 
-- docs/DPG.md
-- GOVERNANCE.md
-- MAINTAINERS.md
-- SECURITY.md
-- SUPPORT.md
-- PRIVACY.md
-- DO_NO_HARM.md
-- docs/DATA_EXPORT.md
+- [docs/DPG.md](docs/DPG.md)
+- [GOVERNANCE.md](GOVERNANCE.md)
+- [MAINTAINERS.md](MAINTAINERS.md)
+- [SECURITY.md](SECURITY.md)
+- [SUPPORT.md](SUPPORT.md)
+- [PRIVACY.md](PRIVACY.md)
+- [DO_NO_HARM.md](DO_NO_HARM.md)
+- [docs/DATA_EXPORT.md](docs/DATA_EXPORT.md)
