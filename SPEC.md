@@ -517,6 +517,22 @@ v0.0.4 では以下を **含めない**。
 * vt-compat と vt-optimizer の出力比較
   * monaco + osm-fiord で削除数と削除レイヤーが一致
 
+## 1.60 マイルストーン（v0.1.1）
+
+* `inspect --tile --summary` の tile summary に **タイル全体の統計** を追加
+  * Layers in this tile（layer 数）
+  * Vertices in this tile（頂点数合計）
+  * Keys in this tile（property key のユニーク数）
+  * Values in this tile（property value のユニーク数）
+* text / json / ndjson の出力に反映
+
+## 1.61 マイルストーン（v0.1.2）
+
+* `inspect --tile --summary` の **各レイヤー統計** を拡張
+  * `# of vertices`（頂点数）
+  * `# of values`（property value のユニーク数）
+* `--recommend` の top tile summaries にも同一情報を含める
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）

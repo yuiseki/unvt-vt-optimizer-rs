@@ -519,13 +519,24 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
                 println!("{}", emphasize_section_heading("## Top Tile Summaries"));
                 for summary in report.top_tile_summaries.iter() {
                     println!(
-                        "- tile_summary: z={} x={} y={} total_features={}",
-                        summary.zoom, summary.x, summary.y, summary.total_features
+                        "- tile_summary: z={} x={} y={} layers={} total_features={} vertices={} keys={} values={}",
+                        summary.zoom,
+                        summary.x,
+                        summary.y,
+                        summary.layer_count,
+                        summary.total_features,
+                        summary.vertex_count,
+                        summary.property_key_count,
+                        summary.property_value_count
                     );
                     for layer in summary.layers.iter() {
                         println!(
-                            "  layer: {} features={} property_keys={}",
-                            layer.name, layer.feature_count, layer.property_key_count
+                            "  layer: {} features={} vertices={} property_keys={} values={}",
+                            layer.name,
+                            layer.feature_count,
+                            layer.vertex_count,
+                            layer.property_key_count,
+                            layer.property_value_count
                         );
                     }
                 }
@@ -534,13 +545,24 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
                 println!();
                 println!("{}", emphasize_section_heading("## Tile Summary"));
                 println!(
-                    "- z={} x={} y={} total_features={}",
-                    summary.zoom, summary.x, summary.y, summary.total_features
+                    "- z={} x={} y={} layers={} total_features={} vertices={} keys={} values={}",
+                    summary.zoom,
+                    summary.x,
+                    summary.y,
+                    summary.layer_count,
+                    summary.total_features,
+                    summary.vertex_count,
+                    summary.property_key_count,
+                    summary.property_value_count
                 );
                 for layer in summary.layers.iter() {
                     println!(
-                        "  layer: {} features={} property_keys={}",
-                        layer.name, layer.feature_count, layer.property_key_count
+                        "  layer: {} features={} vertices={} property_keys={} values={}",
+                        layer.name,
+                        layer.feature_count,
+                        layer.vertex_count,
+                        layer.property_key_count,
+                        layer.property_value_count
                     );
                     if !layer.property_keys.is_empty() {
                         println!("    keys: {}", layer.property_keys.join(","));

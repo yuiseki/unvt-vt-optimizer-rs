@@ -97,18 +97,26 @@ fn inspect_tile_summary_reports_layer_counts() {
     assert_eq!(summary.zoom, 3);
     assert_eq!(summary.x, 4);
     assert_eq!(summary.y, 5);
+    assert_eq!(summary.layer_count, 2);
     assert_eq!(summary.total_features, 3);
+    assert_eq!(summary.vertex_count, 3);
+    assert_eq!(summary.property_key_count, 3);
+    assert_eq!(summary.property_value_count, 4);
     assert_eq!(summary.layers.len(), 2);
     assert_eq!(summary.layers[0].name, "roads");
     assert_eq!(summary.layers[0].feature_count, 2);
+    assert_eq!(summary.layers[0].vertex_count, 2);
     assert_eq!(summary.layers[0].property_key_count, 2);
+    assert_eq!(summary.layers[0].property_value_count, 3);
     assert_eq!(
         summary.layers[0].property_keys,
         vec!["class".to_string(), "name".to_string()]
     );
     assert_eq!(summary.layers[1].name, "buildings");
     assert_eq!(summary.layers[1].feature_count, 1);
+    assert_eq!(summary.layers[1].vertex_count, 1);
     assert_eq!(summary.layers[1].property_key_count, 1);
+    assert_eq!(summary.layers[1].property_value_count, 1);
     assert_eq!(summary.layers[1].property_keys, vec!["height".to_string()]);
 }
 
@@ -178,9 +186,15 @@ fn inspect_tile_summary_filters_layer() {
     let report = inspect_mbtiles_with_options(&path, options).expect("inspect");
     let summary = report.tile_summary.expect("summary");
     assert_eq!(summary.total_features, 2);
+    assert_eq!(summary.layer_count, 1);
+    assert_eq!(summary.vertex_count, 2);
+    assert_eq!(summary.property_key_count, 2);
+    assert_eq!(summary.property_value_count, 3);
     assert_eq!(summary.layers.len(), 1);
     assert_eq!(summary.layers[0].name, "roads");
+    assert_eq!(summary.layers[0].vertex_count, 2);
     assert_eq!(summary.layers[0].property_key_count, 2);
+    assert_eq!(summary.layers[0].property_value_count, 3);
     assert_eq!(
         summary.layers[0].property_keys,
         vec!["class".to_string(), "name".to_string()]

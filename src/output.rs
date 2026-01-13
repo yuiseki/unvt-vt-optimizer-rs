@@ -125,7 +125,11 @@ pub fn ndjson_lines(report: &MbtilesReport, mut options: NdjsonOptions) -> Resul
                 "z": summary.zoom,
                 "x": summary.x,
                 "y": summary.y,
+                "layers": summary.layer_count,
                 "total_features": summary.total_features,
+                "vertices": summary.vertex_count,
+                "keys": summary.property_key_count,
+                "values": summary.property_value_count,
             }))?);
         } else {
             lines.push(serde_json::to_string(&json!({
@@ -152,7 +156,11 @@ pub fn ndjson_lines(report: &MbtilesReport, mut options: NdjsonOptions) -> Resul
                     "z": summary.zoom,
                     "x": summary.x,
                     "y": summary.y,
+                    "layers": summary.layer_count,
                     "total_features": summary.total_features,
+                    "vertices": summary.vertex_count,
+                    "keys": summary.property_key_count,
+                    "values": summary.property_value_count,
                 }))?);
             } else {
                 lines.push(serde_json::to_string(&json!({

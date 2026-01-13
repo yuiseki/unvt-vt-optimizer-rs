@@ -93,7 +93,9 @@ pub struct TopTile {
 pub struct LayerSummary {
     pub name: String,
     pub feature_count: usize,
+    pub vertex_count: u64,
     pub property_key_count: usize,
+    pub property_value_count: usize,
     pub property_keys: Vec<String>,
 }
 
@@ -111,7 +113,11 @@ pub struct TileSummary {
     pub zoom: u8,
     pub x: u32,
     pub y: u32,
+    pub layer_count: usize,
     pub total_features: usize,
+    pub vertex_count: u64,
+    pub property_key_count: usize,
+    pub property_value_count: usize,
     pub layers: Vec<LayerSummary>,
 }
 
@@ -923,6 +929,9 @@ fn build_tile_summary(
         .get_layer_metadata()
         .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
     let mut total_features = 0usize;
+    let mut total_vertices = 0u64;
+    let mut tile_keys: HashSet<String> = HashSet::new();
+    let mut tile_values: HashSet<String> = HashSet::new();
     let mut summaries = Vec::new();
     for layer in layers {
         if let Some(filter) = layer_filter {
@@ -934,21 +943,32 @@ fn build_tile_summary(
             .get_features(layer.layer_index)
             .map_err(|err| anyhow::anyhow!("read layer features: {err}"))?;
         let mut keys = HashSet::new();
+        let mut values = HashSet::new();
+        let mut vertex_count = 0u64;
+        let mut feature_count = 0usize;
         for feature in features {
+            feature_count += 1;
+            vertex_count += count_vertices(&feature.geometry) as u64;
             if let Some(props) = feature.properties {
-                for key in props.keys() {
+                for (key, value) in props {
                     keys.insert(key.clone());
+                    tile_keys.insert(key);
+                    let value_text = format_property_value(&value);
+                    values.insert(value_text.clone());
+                    tile_values.insert(value_text);
                 }
             }
         }
         let mut key_list = keys.into_iter().collect::<Vec<_>>();
         key_list.sort();
-        let feature_count = layer.feature_count;
         total_features += feature_count;
+        total_vertices += vertex_count;
         summaries.push(LayerSummary {
             name: layer.name,
             feature_count,
+            vertex_count,
             property_key_count: key_list.len(),
+            property_value_count: values.len(),
             property_keys: key_list,
         });
     }
@@ -956,7 +976,11 @@ fn build_tile_summary(
         zoom: coord.zoom,
         x: coord.x,
         y: coord.y,
+        layer_count: summaries.len(),
         total_features,
+        vertex_count: total_vertices,
+        property_key_count: tile_keys.len(),
+        property_value_count: tile_values.len(),
         layers: summaries,
     })
 }
