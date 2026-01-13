@@ -58,6 +58,34 @@ fn create_layer_mbtiles(path: &Path) {
     .expect("tile insert");
 }
 
+fn create_layer_mbtiles_multiple(path: &Path) {
+    let conn = rusqlite::Connection::open(path).expect("open");
+    conn.execute_batch(
+        "
+        CREATE TABLE metadata (name TEXT, value TEXT);
+        CREATE TABLE tiles (
+            zoom_level INTEGER,
+            tile_column INTEGER,
+            tile_row INTEGER,
+            tile_data BLOB
+        );
+        ",
+    )
+    .expect("schema");
+
+    let data = create_layer_tile();
+    conn.execute(
+        "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (0, 0, 0, ?1)",
+        (data.clone(),),
+    )
+    .expect("tile insert 0");
+    conn.execute(
+        "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (0, 0, 1, ?1)",
+        (data,),
+    )
+    .expect("tile insert 1");
+}
+
 fn create_layer_mbtiles_map_images(path: &Path) {
     let conn = rusqlite::Connection::open(path).expect("open");
     conn.execute_batch(
@@ -96,7 +124,7 @@ fn prune_mbtiles_removes_unlisted_layers() {
     .expect("write style");
     let style = read_style(&style).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, false).expect("prune mbtiles");
+    prune_mbtiles_layer_only(&input, &output, &style, false, 1, 10).expect("prune mbtiles");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn
@@ -127,10 +155,32 @@ fn prune_mbtiles_supports_map_images_schema() {
     .expect("write style");
     let style = read_style(&style).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, false).expect("prune mbtiles");
+    prune_mbtiles_layer_only(&input, &output, &style, false, 1, 10).expect("prune mbtiles");
 
     let report = inspect_mbtiles(&output).expect("inspect output");
     assert_eq!(report.overall.tile_count, 1);
+}
+
+#[test]
+fn prune_mbtiles_handles_multiple_tiles() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let input = dir.path().join("input.mbtiles");
+    let output = dir.path().join("output.mbtiles");
+    let style = dir.path().join("style.json");
+
+    create_layer_mbtiles_multiple(&input);
+
+    fs::write(
+        &style,
+        r#"{"version":8,"sources":{"osm":{"type":"vector"}},"layers":[{"id":"roads","type":"line","source":"osm","source-layer":"roads","paint":{"line-width":1}}]}"#,
+    )
+    .expect("write style");
+    let style = read_style(&style).expect("read style");
+
+    prune_mbtiles_layer_only(&input, &output, &style, false, 2, 10).expect("prune mbtiles");
+
+    let report = inspect_mbtiles(&output).expect("inspect output");
+    assert_eq!(report.overall.tile_count, 2);
 }
 #[test]
 fn prune_mbtiles_filters_features_by_style() {
@@ -187,7 +237,7 @@ fn prune_mbtiles_filters_features_by_style() {
     .expect("write style");
     let style = read_style(&style_path).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, true).expect("prune mbtiles");
+    prune_mbtiles_layer_only(&input, &output, &style, true, 2, 10).expect("prune mbtiles");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn
@@ -227,7 +277,7 @@ fn prune_mbtiles_keeps_features_on_unknown_filter() {
     .expect("write style");
     let style = read_style(&style_path).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, true).expect("prune mbtiles");
+    prune_mbtiles_layer_only(&input, &output, &style, true, 2, 10).expect("prune mbtiles");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn

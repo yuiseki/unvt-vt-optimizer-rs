@@ -1,3 +1,5 @@
+use std::thread;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 
@@ -635,8 +637,23 @@ fn run_optimize(args: vt_optimizer::cli::OptimizeArgs) -> Result<()> {
     match (decision.input, decision.output) {
         (vt_optimizer::format::TileFormat::Mbtiles, vt_optimizer::format::TileFormat::Mbtiles) => {
             let apply_filters = args.style_mode == vt_optimizer::cli::StyleMode::LayerFilter;
-            println!("- Processing tiles");
-            let stats = prune_mbtiles_layer_only(&args.input, &output_path, &style, apply_filters)?;
+            let threads = args.threads.unwrap_or_else(|| {
+                thread::available_parallelism()
+                    .map(|n| n.get())
+                    .unwrap_or(1)
+            });
+            println!(
+                "- Processing tiles (threads={threads}, io_batch={})",
+                args.io_batch
+            );
+            let stats = prune_mbtiles_layer_only(
+                &args.input,
+                &output_path,
+                &style,
+                apply_filters,
+                threads,
+                args.io_batch,
+            )?;
             println!("- Writing output file to {}", output_path.display());
             print_prune_summary(&stats);
         }

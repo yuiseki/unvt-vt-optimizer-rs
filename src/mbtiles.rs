@@ -2,6 +2,8 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -2173,6 +2175,22 @@ impl PruneStats {
             .entry(layer.to_string())
             .or_insert(0) += 1;
     }
+
+    fn merge(&mut self, other: PruneStats) {
+        for (zoom, count) in other.removed_features_by_zoom.into_iter() {
+            *self.removed_features_by_zoom.entry(zoom).or_insert(0) += count;
+        }
+        for (layer, zooms) in other.removed_layers_by_zoom.into_iter() {
+            self.removed_layers_by_zoom
+                .entry(layer)
+                .or_default()
+                .extend(zooms);
+        }
+        self.unknown_filters += other.unknown_filters;
+        for (layer, count) in other.unknown_filters_by_layer.into_iter() {
+            *self.unknown_filters_by_layer.entry(layer).or_insert(0) += count;
+        }
+    }
 }
 
 pub fn prune_mbtiles_layer_only(
@@ -2180,6 +2198,8 @@ pub fn prune_mbtiles_layer_only(
     output: &Path,
     style: &crate::style::MapboxStyle,
     apply_filters: bool,
+    threads: usize,
+    io_batch: u32,
 ) -> Result<PruneStats> {
     ensure_mbtiles_path(input)?;
     ensure_mbtiles_path(output)?;
@@ -2209,64 +2229,151 @@ pub fn prune_mbtiles_layer_only(
         .context("insert metadata")?;
     }
 
-    let mut tiles: Vec<(u8, u32, u32, Vec<u8>)> = Vec::new();
-    match schema_mode {
-        TilesSchemaMode::Tiles => {
-            let mut stmt = input_conn
-                .prepare(
-                    "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles ORDER BY zoom_level, tile_column, tile_row",
-                )
-                .context("prepare tile scan")?;
-            let mut rows = stmt.query([]).context("query tiles")?;
-            while let Some(row) = rows.next().context("read tile row")? {
-                let zoom: u8 = row.get(0)?;
-                let x: u32 = row.get(1)?;
-                let y: u32 = row.get(2)?;
-                let data: Vec<u8> = row.get(3)?;
-                tiles.push((zoom, x, y, data));
-            }
-        }
-        TilesSchemaMode::MapImages => {
-            let mut stmt = input_conn
-                .prepare(
-                    "SELECT map.zoom_level, map.tile_column, map.tile_row, images.tile_data FROM map JOIN images ON map.tile_id = images.tile_id ORDER BY map.zoom_level, map.tile_column, map.tile_row",
-                )
-                .context("prepare map/images scan")?;
-            let mut rows = stmt.query([]).context("query map/images")?;
-            while let Some(row) = rows.next().context("read map/images row")? {
-                let zoom: u8 = row.get(0)?;
-                let x: u32 = row.get(1)?;
-                let y: u32 = row.get(2)?;
-                let data: Vec<u8> = row.get(3)?;
-                tiles.push((zoom, x, y, data));
-            }
-        }
-    }
-
     let keep_layers = style.source_layers();
+    let worker_count = threads.max(1);
+    let queue_capacity = io_batch.max(1) as usize;
+
+    let (tx_in, rx_in): (mpsc::SyncSender<TileInput>, mpsc::Receiver<TileInput>) =
+        mpsc::sync_channel(queue_capacity);
+    let (tx_out, rx_out): (mpsc::SyncSender<TileOutput>, mpsc::Receiver<TileOutput>) =
+        mpsc::sync_channel(queue_capacity);
+    let rx_in = Arc::new(Mutex::new(rx_in));
+
+    let mut handles = Vec::with_capacity(worker_count);
+    for _ in 0..worker_count {
+        let rx_in = Arc::clone(&rx_in);
+        let tx_out = tx_out.clone();
+        let keep_layers = keep_layers.clone();
+        let style = style.clone();
+        handles.push(thread::spawn(move || -> Result<PruneStats> {
+            let mut stats = PruneStats::default();
+            loop {
+                let next = {
+                    let guard = rx_in.lock().expect("lock tiles");
+                    guard.recv()
+                };
+                let tile = match next {
+                    Ok(tile) => tile,
+                    Err(_) => break,
+                };
+                let is_gzip = tile.data.starts_with(&[0x1f, 0x8b]);
+                let payload = decode_tile_payload(&tile.data)?;
+                let encoded = prune_tile_layers(
+                    &payload,
+                    tile.zoom,
+                    &style,
+                    &keep_layers,
+                    apply_filters,
+                    &mut stats,
+                )?;
+                let tile_data = encode_tile_payload(&encoded, is_gzip)?;
+                let output = if tile.map_images {
+                    let tile_id = format!("{}-{}-{}", tile.zoom, tile.x, tile.y);
+                    TileOutput::MapImages {
+                        zoom: tile.zoom,
+                        x: tile.x,
+                        y: tile.y,
+                        tile_id,
+                        data: tile_data,
+                    }
+                } else {
+                    TileOutput::Tiles {
+                        zoom: tile.zoom,
+                        x: tile.x,
+                        y: tile.y,
+                        data: tile_data,
+                    }
+                };
+                tx_out.send(output).context("send processed tile")?;
+            }
+            Ok(stats)
+        }));
+    }
+    drop(tx_out);
+
+    let tx_in_producer = tx_in.clone();
+    let producer_handle = {
+        let input_path = input.to_path_buf();
+        thread::spawn(move || -> Result<()> {
+            let input_conn = Connection::open(&input_path).with_context(|| {
+                format!("failed to open input mbtiles: {}", input_path.display())
+            })?;
+            match schema_mode {
+                TilesSchemaMode::Tiles => {
+                    let mut stmt = input_conn
+                        .prepare(
+                            "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles ORDER BY zoom_level, tile_column, tile_row",
+                        )
+                        .context("prepare tile scan")?;
+                    let mut rows = stmt.query([]).context("query tiles")?;
+                    while let Some(row) = rows.next().context("read tile row")? {
+                        let zoom: u8 = row.get(0)?;
+                        let x: u32 = row.get(1)?;
+                        let y: u32 = row.get(2)?;
+                        let data: Vec<u8> = row.get(3)?;
+                        if tx_in_producer
+                            .send(TileInput {
+                                zoom,
+                                x,
+                                y,
+                                data,
+                                map_images: false,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                }
+                TilesSchemaMode::MapImages => {
+                    let mut stmt = input_conn
+                        .prepare(
+                            "SELECT map.zoom_level, map.tile_column, map.tile_row, images.tile_data FROM map JOIN images ON map.tile_id = images.tile_id ORDER BY map.zoom_level, map.tile_column, map.tile_row",
+                        )
+                        .context("prepare map/images scan")?;
+                    let mut rows = stmt.query([]).context("query map/images")?;
+                    while let Some(row) = rows.next().context("read map/images row")? {
+                        let zoom: u8 = row.get(0)?;
+                        let x: u32 = row.get(1)?;
+                        let y: u32 = row.get(2)?;
+                        let data: Vec<u8> = row.get(3)?;
+                        if tx_in_producer
+                            .send(TileInput {
+                                zoom,
+                                x,
+                                y,
+                                data,
+                                map_images: true,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
+    };
+    drop(tx_in);
+
     let mut stats = PruneStats::default();
-    for (zoom, x, y, data) in tiles.into_iter() {
-        let is_gzip = data.starts_with(&[0x1f, 0x8b]);
-        let payload = decode_tile_payload(&data)?;
-        let encoded = prune_tile_layers(
-            &payload,
-            zoom,
-            style,
-            &keep_layers,
-            apply_filters,
-            &mut stats,
-        )?;
-        let tile_data = encode_tile_payload(&encoded, is_gzip)?;
-        match schema_mode {
-            TilesSchemaMode::Tiles => {
+    for output in rx_out.iter() {
+        match output {
+            TileOutput::Tiles { zoom, x, y, data } => {
                 tx.execute(
                     "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
-                    (zoom as i64, x as i64, y as i64, tile_data),
+                    (zoom as i64, x as i64, y as i64, data),
                 )
                 .context("insert tile")?;
             }
-            TilesSchemaMode::MapImages => {
-                let tile_id = format!("{}-{}-{}", zoom, x, y);
+            TileOutput::MapImages {
+                zoom,
+                x,
+                y,
+                tile_id,
+                data,
+            } => {
                 tx.execute(
                     "INSERT INTO map (zoom_level, tile_column, tile_row, tile_id) VALUES (?1, ?2, ?3, ?4)",
                     (zoom as i64, x as i64, y as i64, tile_id.clone()),
@@ -2274,11 +2381,23 @@ pub fn prune_mbtiles_layer_only(
                 .context("insert map row")?;
                 tx.execute(
                     "INSERT INTO images (tile_id, tile_data) VALUES (?1, ?2)",
-                    (tile_id, tile_data),
+                    (tile_id, data),
                 )
                 .context("insert image row")?;
             }
         }
+    }
+
+    let producer_result = producer_handle
+        .join()
+        .map_err(|_| anyhow::anyhow!("producer thread panicked"))?;
+    producer_result?;
+
+    for handle in handles {
+        let worker_stats = handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("worker thread panicked"))??;
+        stats.merge(worker_stats);
     }
 
     tx.commit().context("commit output")?;
@@ -2289,6 +2408,32 @@ pub fn prune_mbtiles_layer_only(
         );
     }
     Ok(stats)
+}
+
+#[derive(Debug)]
+struct TileInput {
+    zoom: u8,
+    x: u32,
+    y: u32,
+    data: Vec<u8>,
+    map_images: bool,
+}
+
+#[derive(Debug)]
+enum TileOutput {
+    Tiles {
+        zoom: u8,
+        x: u32,
+        y: u32,
+        data: Vec<u8>,
+    },
+    MapImages {
+        zoom: u8,
+        x: u32,
+        y: u32,
+        tile_id: String,
+        data: Vec<u8>,
+    },
 }
 
 pub fn simplify_mbtiles_tile(
