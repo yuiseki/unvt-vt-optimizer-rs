@@ -83,7 +83,10 @@ pub struct InspectArgs {
     #[arg(long, value_enum, default_value_t = ReportFormat::Text)]
     pub output: ReportFormat,
 
-    /// Limit output sections (comma-separated, e.g. summary,zoom,histogram).
+    /// Limit output sections (comma-separated).
+    /// Possible values: metadata, summary, zoom, histogram, histogram_by_zoom,
+    /// layers, recommendations, bucket, bucket_tiles, top_tiles, tile_summary,
+    /// top_tile_summaries, all.
     #[arg(long)]
     pub stats: Option<String>,
 
