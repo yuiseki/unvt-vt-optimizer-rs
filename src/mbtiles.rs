@@ -2,11 +2,11 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashSet};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use crossbeam_channel::{bounded, Receiver, Sender};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -1407,15 +1407,34 @@ fn open_readonly_mbtiles(path: &Path) -> Result<Connection> {
 }
 
 fn apply_read_pragmas(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
+    apply_read_pragmas_with_cache(conn, Some(200))
+}
+
+fn apply_read_pragmas_with_cache(conn: &Connection, cache_mb: Option<u64>) -> Result<()> {
+    let cache_kb = cache_mb.unwrap_or(200).saturating_mul(1024);
+    conn.execute_batch(&format!(
         "
         PRAGMA query_only = ON;
         PRAGMA temp_store = MEMORY;
         PRAGMA synchronous = OFF;
-        PRAGMA cache_size = -200000;
-        ",
-    )
+        PRAGMA cache_size = -{cache_kb};
+        "
+    ))
     .context("failed to apply read pragmas")?;
+    Ok(())
+}
+
+fn apply_write_pragmas_with_cache(conn: &Connection, cache_mb: Option<u64>) -> Result<()> {
+    let cache_kb = cache_mb.unwrap_or(200).saturating_mul(1024);
+    conn.execute_batch(&format!(
+        "
+        PRAGMA journal_mode = WAL;
+        PRAGMA synchronous = OFF;
+        PRAGMA temp_store = MEMORY;
+        PRAGMA cache_size = -{cache_kb};
+        "
+    ))
+    .context("failed to apply write pragmas")?;
     Ok(())
 }
 
@@ -2193,21 +2212,31 @@ impl PruneStats {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PruneOptions {
+    pub threads: usize,
+    pub io_batch: u32,
+    pub readers: usize,
+    pub read_cache_mb: Option<u64>,
+    pub write_cache_mb: Option<u64>,
+}
+
 pub fn prune_mbtiles_layer_only(
     input: &Path,
     output: &Path,
     style: &crate::style::MapboxStyle,
     apply_filters: bool,
-    threads: usize,
-    io_batch: u32,
+    options: PruneOptions,
 ) -> Result<PruneStats> {
     ensure_mbtiles_path(input)?;
     ensure_mbtiles_path(output)?;
 
     let input_conn = Connection::open(input)
         .with_context(|| format!("failed to open input mbtiles: {}", input.display()))?;
+    apply_read_pragmas_with_cache(&input_conn, options.read_cache_mb)?;
     let mut output_conn = Connection::open(output)
         .with_context(|| format!("failed to open output mbtiles: {}", output.display()))?;
+    apply_write_pragmas_with_cache(&output_conn, options.write_cache_mb)?;
     let schema_mode = tiles_schema_mode(&input_conn)?;
     create_output_schema(&output_conn, schema_mode)?;
 
@@ -2230,32 +2259,22 @@ pub fn prune_mbtiles_layer_only(
     }
 
     let keep_layers = style.source_layers();
-    let worker_count = threads.max(1);
-    let queue_capacity = io_batch.max(1) as usize;
+    let worker_count = options.threads.max(1);
+    let reader_count = options.readers.max(1);
+    let queue_capacity = options.io_batch.max(1) as usize;
 
-    let (tx_in, rx_in): (mpsc::SyncSender<TileInput>, mpsc::Receiver<TileInput>) =
-        mpsc::sync_channel(queue_capacity);
-    let (tx_out, rx_out): (mpsc::SyncSender<TileOutput>, mpsc::Receiver<TileOutput>) =
-        mpsc::sync_channel(queue_capacity);
-    let rx_in = Arc::new(Mutex::new(rx_in));
+    let (tx_in, rx_in): (Sender<TileInput>, Receiver<TileInput>) = bounded(queue_capacity);
+    let (tx_out, rx_out): (Sender<TileOutput>, Receiver<TileOutput>) = bounded(queue_capacity);
 
-    let mut handles = Vec::with_capacity(worker_count);
+    let mut worker_handles = Vec::with_capacity(worker_count);
     for _ in 0..worker_count {
-        let rx_in = Arc::clone(&rx_in);
+        let rx_in = rx_in.clone();
         let tx_out = tx_out.clone();
         let keep_layers = keep_layers.clone();
         let style = style.clone();
-        handles.push(thread::spawn(move || -> Result<PruneStats> {
+        worker_handles.push(thread::spawn(move || -> Result<PruneStats> {
             let mut stats = PruneStats::default();
-            loop {
-                let next = {
-                    let guard = rx_in.lock().expect("lock tiles");
-                    guard.recv()
-                };
-                let tile = match next {
-                    Ok(tile) => tile,
-                    Err(_) => break,
-                };
+            while let Ok(tile) = rx_in.recv() {
                 let is_gzip = tile.data.starts_with(&[0x1f, 0x8b]);
                 let payload = decode_tile_payload(&tile.data)?;
                 let encoded = prune_tile_layers(
@@ -2291,27 +2310,36 @@ pub fn prune_mbtiles_layer_only(
     }
     drop(tx_out);
 
-    let tx_in_producer = tx_in.clone();
-    let producer_handle = {
+    let ranges = match schema_mode {
+        TilesSchemaMode::Tiles => rowid_ranges(&input_conn, "tiles", reader_count)?,
+        TilesSchemaMode::MapImages => rowid_ranges(&input_conn, "map", reader_count)?,
+    };
+
+    let mut reader_handles = Vec::with_capacity(ranges.len());
+    for (start_rowid, end_rowid) in ranges {
+        let tx_in = tx_in.clone();
         let input_path = input.to_path_buf();
-        thread::spawn(move || -> Result<()> {
+        reader_handles.push(thread::spawn(move || -> Result<()> {
             let input_conn = Connection::open(&input_path).with_context(|| {
                 format!("failed to open input mbtiles: {}", input_path.display())
             })?;
+            apply_read_pragmas_with_cache(&input_conn, options.read_cache_mb)?;
             match schema_mode {
                 TilesSchemaMode::Tiles => {
                     let mut stmt = input_conn
                         .prepare(
-                            "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles ORDER BY zoom_level, tile_column, tile_row",
+                            "SELECT zoom_level, tile_column, tile_row, tile_data FROM tiles WHERE rowid BETWEEN ?1 AND ?2 ORDER BY rowid",
                         )
                         .context("prepare tile scan")?;
-                    let mut rows = stmt.query([]).context("query tiles")?;
+                    let mut rows = stmt
+                        .query(params![start_rowid, end_rowid])
+                        .context("query tiles")?;
                     while let Some(row) = rows.next().context("read tile row")? {
                         let zoom: u8 = row.get(0)?;
                         let x: u32 = row.get(1)?;
                         let y: u32 = row.get(2)?;
                         let data: Vec<u8> = row.get(3)?;
-                        if tx_in_producer
+                        if tx_in
                             .send(TileInput {
                                 zoom,
                                 x,
@@ -2328,16 +2356,18 @@ pub fn prune_mbtiles_layer_only(
                 TilesSchemaMode::MapImages => {
                     let mut stmt = input_conn
                         .prepare(
-                            "SELECT map.zoom_level, map.tile_column, map.tile_row, images.tile_data FROM map JOIN images ON map.tile_id = images.tile_id ORDER BY map.zoom_level, map.tile_column, map.tile_row",
+                            "SELECT map.zoom_level, map.tile_column, map.tile_row, images.tile_data FROM map JOIN images ON map.tile_id = images.tile_id WHERE map.rowid BETWEEN ?1 AND ?2 ORDER BY map.rowid",
                         )
                         .context("prepare map/images scan")?;
-                    let mut rows = stmt.query([]).context("query map/images")?;
+                    let mut rows = stmt
+                        .query(params![start_rowid, end_rowid])
+                        .context("query map/images")?;
                     while let Some(row) = rows.next().context("read map/images row")? {
                         let zoom: u8 = row.get(0)?;
                         let x: u32 = row.get(1)?;
                         let y: u32 = row.get(2)?;
                         let data: Vec<u8> = row.get(3)?;
-                        if tx_in_producer
+                        if tx_in
                             .send(TileInput {
                                 zoom,
                                 x,
@@ -2353,8 +2383,8 @@ pub fn prune_mbtiles_layer_only(
                 }
             }
             Ok(())
-        })
-    };
+        }));
+    }
     drop(tx_in);
 
     let mut stats = PruneStats::default();
@@ -2388,12 +2418,13 @@ pub fn prune_mbtiles_layer_only(
         }
     }
 
-    let producer_result = producer_handle
-        .join()
-        .map_err(|_| anyhow::anyhow!("producer thread panicked"))?;
-    producer_result?;
+    for handle in reader_handles {
+        handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("reader thread panicked"))??;
+    }
 
-    for handle in handles {
+    for handle in worker_handles {
         let worker_stats = handle
             .join()
             .map_err(|_| anyhow::anyhow!("worker thread panicked"))??;
@@ -2408,6 +2439,31 @@ pub fn prune_mbtiles_layer_only(
         );
     }
     Ok(stats)
+}
+
+fn rowid_ranges(conn: &Connection, table: &str, readers: usize) -> Result<Vec<(i64, i64)>> {
+    let query = format!("SELECT MIN(rowid), MAX(rowid) FROM {table}",);
+    let (min_rowid, max_rowid): (Option<i64>, Option<i64>) =
+        conn.query_row(&query, [], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    let (Some(min_rowid), Some(max_rowid)) = (min_rowid, max_rowid) else {
+        return Ok(Vec::new());
+    };
+    if max_rowid < min_rowid {
+        return Ok(Vec::new());
+    }
+    let total = max_rowid - min_rowid + 1;
+    let reader_count = readers.max(1) as i64;
+    let chunk = (total + reader_count - 1) / reader_count;
+    let mut ranges = Vec::new();
+    for idx in 0..reader_count {
+        let start = min_rowid + idx * chunk;
+        if start > max_rowid {
+            break;
+        }
+        let end = (start + chunk - 1).min(max_rowid);
+        ranges.push((start, end));
+    }
+    Ok(ranges)
 }
 
 #[derive(Debug)]

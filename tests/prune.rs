@@ -4,7 +4,7 @@ use std::path::Path;
 use mvt::{GeomEncoder, GeomType, Tile};
 use mvt_reader::Reader;
 
-use vt_optimizer::mbtiles::{inspect_mbtiles, prune_mbtiles_layer_only};
+use vt_optimizer::mbtiles::{inspect_mbtiles, prune_mbtiles_layer_only, PruneOptions};
 use vt_optimizer::style::read_style;
 
 fn create_layer_tile() -> Vec<u8> {
@@ -124,7 +124,20 @@ fn prune_mbtiles_removes_unlisted_layers() {
     .expect("write style");
     let style = read_style(&style).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, false, 1, 10).expect("prune mbtiles");
+    prune_mbtiles_layer_only(
+        &input,
+        &output,
+        &style,
+        false,
+        PruneOptions {
+            threads: 1,
+            io_batch: 10,
+            readers: 1,
+            read_cache_mb: None,
+            write_cache_mb: None,
+        },
+    )
+    .expect("prune mbtiles");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn
@@ -155,7 +168,20 @@ fn prune_mbtiles_supports_map_images_schema() {
     .expect("write style");
     let style = read_style(&style).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, false, 1, 10).expect("prune mbtiles");
+    prune_mbtiles_layer_only(
+        &input,
+        &output,
+        &style,
+        false,
+        PruneOptions {
+            threads: 1,
+            io_batch: 10,
+            readers: 1,
+            read_cache_mb: None,
+            write_cache_mb: None,
+        },
+    )
+    .expect("prune mbtiles");
 
     let report = inspect_mbtiles(&output).expect("inspect output");
     assert_eq!(report.overall.tile_count, 1);
@@ -177,7 +203,20 @@ fn prune_mbtiles_handles_multiple_tiles() {
     .expect("write style");
     let style = read_style(&style).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, false, 2, 10).expect("prune mbtiles");
+    prune_mbtiles_layer_only(
+        &input,
+        &output,
+        &style,
+        false,
+        PruneOptions {
+            threads: 2,
+            io_batch: 10,
+            readers: 2,
+            read_cache_mb: None,
+            write_cache_mb: None,
+        },
+    )
+    .expect("prune mbtiles");
 
     let report = inspect_mbtiles(&output).expect("inspect output");
     assert_eq!(report.overall.tile_count, 2);
@@ -237,7 +276,20 @@ fn prune_mbtiles_filters_features_by_style() {
     .expect("write style");
     let style = read_style(&style_path).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, true, 2, 10).expect("prune mbtiles");
+    prune_mbtiles_layer_only(
+        &input,
+        &output,
+        &style,
+        true,
+        PruneOptions {
+            threads: 2,
+            io_batch: 10,
+            readers: 2,
+            read_cache_mb: None,
+            write_cache_mb: None,
+        },
+    )
+    .expect("prune mbtiles");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn
@@ -277,7 +329,20 @@ fn prune_mbtiles_keeps_features_on_unknown_filter() {
     .expect("write style");
     let style = read_style(&style_path).expect("read style");
 
-    prune_mbtiles_layer_only(&input, &output, &style, true, 2, 10).expect("prune mbtiles");
+    prune_mbtiles_layer_only(
+        &input,
+        &output,
+        &style,
+        true,
+        PruneOptions {
+            threads: 2,
+            io_batch: 10,
+            readers: 2,
+            read_cache_mb: None,
+            write_cache_mb: None,
+        },
+    )
+    .expect("prune mbtiles");
 
     let conn = rusqlite::Connection::open(&output).expect("open output");
     let data: Vec<u8> = conn
@@ -291,4 +356,39 @@ fn prune_mbtiles_keeps_features_on_unknown_filter() {
     let layers = reader.get_layer_metadata().expect("layers");
     assert_eq!(layers.len(), 1);
     assert_eq!(layers[0].name, "roads");
+}
+
+#[test]
+fn prune_mbtiles_handles_multiple_readers() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let input = dir.path().join("input.mbtiles");
+    let output = dir.path().join("output.mbtiles");
+    let style = dir.path().join("style.json");
+
+    create_layer_mbtiles_multiple(&input);
+
+    fs::write(
+        &style,
+        r#"{"version":8,"sources":{"osm":{"type":"vector"}},"layers":[{"id":"roads","type":"line","source":"osm","source-layer":"roads","paint":{"line-width":1}}]}"#,
+    )
+    .expect("write style");
+    let style = read_style(&style).expect("read style");
+
+    prune_mbtiles_layer_only(
+        &input,
+        &output,
+        &style,
+        false,
+        PruneOptions {
+            threads: 4,
+            io_batch: 10,
+            readers: 2,
+            read_cache_mb: None,
+            write_cache_mb: None,
+        },
+    )
+    .expect("prune mbtiles");
+
+    let report = inspect_mbtiles(&output).expect("inspect output");
+    assert_eq!(report.overall.tile_count, 2);
 }
