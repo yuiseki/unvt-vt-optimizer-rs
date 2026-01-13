@@ -37,7 +37,7 @@ jobs:
 
       - name: Dispatch release workflow
         if: steps.tag.outputs.created == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const owner = context.repo.owner;
