@@ -551,7 +551,7 @@ v0.0.4 では以下を **含めない**。
   * file layers / tile summary を指定レイヤのみ表示
   * `--layer` は非推奨エイリアスとして `--layers` に統合
 
-## 1.65 マイルストーン（v0.4.1）
+## 1.65 マイルストーン（v0.4.2）
 
 * `inspect` の text 出力で Zoom セクションをテーブル表示に変更（%tiles/%size/acc% 追加）
 * `inspect` の text 出力から Histogram by Zoom セクションを除外し、Histogram に注意書きを追加
