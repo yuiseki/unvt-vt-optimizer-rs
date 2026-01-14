@@ -220,7 +220,6 @@ fn main() -> Result<()> {
                     stats: Some("tile_summary".to_string()),
                     no_progress: false,
                     zoom: None,
-                    z: None,
                     x: None,
                     y: None,
                     bucket: None,
@@ -250,7 +249,6 @@ fn main() -> Result<()> {
                 stats: None,
                 no_progress: false,
                 zoom: None,
-                z: None,
                 x: None,
                 y: None,
                 bucket: None,
@@ -294,17 +292,17 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
         Some(value) => Some(parse_tile_spec(value)?),
         None => None,
     };
-    if tile.is_some() && (args.z.is_some() || args.x.is_some() || args.y.is_some()) {
-        anyhow::bail!("--tile cannot be combined with -z/-x/-y");
+    if tile.is_some() && (args.x.is_some() || args.y.is_some()) {
+        anyhow::bail!("--tile cannot be combined with -x/-y");
     }
     if tile.is_none() {
-        if let (Some(z), Some(x), Some(y)) = (args.z, args.x, args.y) {
+        if let (Some(z), Some(x), Some(y)) = (args.zoom, args.x, args.y) {
             tile = Some(vt_optimizer::mbtiles::TileCoord { zoom: z, x, y });
-        } else if args.z.is_some() || args.x.is_some() || args.y.is_some() {
-            anyhow::bail!("-z/-x/-y must be provided together");
+        } else if args.x.is_some() || args.y.is_some() {
+            anyhow::bail!("-x/-y require -z/--zoom");
         }
     }
-    let summary = args.summary || tile.is_some() && args.tile.is_none();
+    let summary = args.summary || (tile.is_some() && args.tile.is_none() && args.x.is_some());
     if summary && tile.is_none() {
         anyhow::bail!("--summary requires --tile z/x/y");
     }

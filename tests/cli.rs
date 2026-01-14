@@ -163,7 +163,6 @@ fn parse_inspect_options() {
             assert_eq!(args.stats.as_deref(), Some("summary,zoom"));
             assert!(args.no_progress);
             assert_eq!(args.zoom, Some(3));
-            assert_eq!(args.z, None);
             assert_eq!(args.x, None);
             assert_eq!(args.y, None);
             assert_eq!(args.bucket, Some(2));
@@ -201,7 +200,7 @@ fn parse_inspect_tile_coords_short_flags() {
     ]);
     match cli.command {
         Some(Command::Inspect(args)) => {
-            assert_eq!(args.z, Some(5));
+            assert_eq!(args.zoom, Some(5));
             assert_eq!(args.x, Some(16));
             assert_eq!(args.y, Some(20));
         }
