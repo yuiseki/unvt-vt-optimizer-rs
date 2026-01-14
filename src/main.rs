@@ -13,7 +13,8 @@ use vt_optimizer::mbtiles::{
 };
 use vt_optimizer::output::{
     format_bytes, format_histogram_table, format_histograms_by_zoom_section,
-    format_metadata_section, ndjson_lines, pad_left, pad_right, resolve_output_format,
+    format_metadata_section, format_zoom_table, ndjson_lines, pad_left, pad_right,
+    resolve_output_format,
 };
 use vt_optimizer::pmtiles::{
     inspect_pmtiles_with_options, mbtiles_to_pmtiles, pmtiles_to_mbtiles, prune_pmtiles_layer_only,
@@ -463,15 +464,8 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
             if include_zoom && !report.by_zoom.is_empty() {
                 println!();
                 println!("{}", emphasize_section_heading("## Zoom"));
-                for zoom in report.by_zoom.iter() {
-                    println!(
-                        "- z={}: tiles={} total={} max={} avg={}",
-                        zoom.zoom,
-                        zoom.stats.tile_count,
-                        format_bytes(zoom.stats.total_bytes),
-                        format_bytes(zoom.stats.max_bytes),
-                        format_bytes(zoom.stats.avg_bytes)
-                    );
+                for line in format_zoom_table(&report.by_zoom) {
+                    println!("{}", emphasize_table_header(&line));
                 }
             }
             if include_histogram && !report.histogram.is_empty() {
@@ -763,6 +757,7 @@ fn format_summary_parts(parts: Vec<(&str, String)>) -> String {
 
 fn emphasize_table_header(line: &str) -> String {
     if line.trim_start().starts_with("range")
+        || line.trim_start().starts_with("z")
         || line.trim_start().starts_with("name")
         || line.trim_start().starts_with("# of")
     {

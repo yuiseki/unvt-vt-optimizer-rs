@@ -6,7 +6,7 @@ use crate::cli::{ReportFormat, TileInfoFormat};
 use std::collections::BTreeMap;
 
 use crate::mbtiles::{
-    FileLayerSummary, HistogramBucket, MbtilesReport, TileSummary, ZoomHistogram,
+    FileLayerSummary, HistogramBucket, MbtilesReport, MbtilesZoomStats, TileSummary, ZoomHistogram,
 };
 
 use std::collections::BTreeSet;
@@ -385,6 +385,64 @@ pub fn format_histogram_table(buckets: &[HistogramBucket]) -> Vec<String> {
             bucket.accum_pct_tiles * 100.0,
             bucket.accum_pct_level_bytes * 100.0,
             warn
+        ));
+    }
+    lines
+}
+
+pub fn format_zoom_table(stats: &[MbtilesZoomStats]) -> Vec<String> {
+    if stats.is_empty() {
+        return Vec::new();
+    }
+    let mut items = stats.to_vec();
+    items.sort_by_key(|item| item.zoom);
+    let zoom_width = items
+        .iter()
+        .map(|item| item.zoom.to_string().len())
+        .max()
+        .unwrap_or(0)
+        .max("z".len());
+    let tiles_width = items
+        .iter()
+        .map(|item| item.stats.tile_count.to_string().len())
+        .max()
+        .unwrap_or(0)
+        .max("tiles".len());
+    let total_width = items
+        .iter()
+        .map(|item| format_bytes(item.stats.total_bytes).len())
+        .max()
+        .unwrap_or(0)
+        .max("total".len());
+    let max_width = items
+        .iter()
+        .map(|item| format_bytes(item.stats.max_bytes).len())
+        .max()
+        .unwrap_or(0)
+        .max("max".len());
+    let avg_width = items
+        .iter()
+        .map(|item| format_bytes(item.stats.avg_bytes).len())
+        .max()
+        .unwrap_or(0)
+        .max("avg".len());
+    let mut lines = Vec::with_capacity(items.len() + 1);
+    lines.push(format!(
+        "  {} {} {} {} {}",
+        pad_right("z", zoom_width),
+        pad_left("tiles", tiles_width),
+        pad_left("total", total_width),
+        pad_left("max", max_width),
+        pad_left("avg", avg_width),
+    ));
+    for item in items {
+        lines.push(format!(
+            "  {} {} {} {} {}",
+            pad_right(&item.zoom.to_string(), zoom_width),
+            pad_left(&item.stats.tile_count.to_string(), tiles_width),
+            pad_left(&format_bytes(item.stats.total_bytes), total_width),
+            pad_left(&format_bytes(item.stats.max_bytes), max_width),
+            pad_left(&format_bytes(item.stats.avg_bytes), avg_width),
         ));
     }
     lines

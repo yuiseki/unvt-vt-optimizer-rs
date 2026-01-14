@@ -551,6 +551,10 @@ v0.0.4 では以下を **含めない**。
   * file layers / tile summary を指定レイヤのみ表示
   * `--layer` は非推奨エイリアスとして `--layers` に統合
 
+## 1.65 マイルストーン（v0.4.1）
+
+* `inspect` の text 出力で Zoom セクションをテーブル表示に変更
+
 ## 2. 用語
 
 * **Tile key**: `z/x/y`（内部表現は XYZ）
