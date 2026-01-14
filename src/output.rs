@@ -5,7 +5,7 @@ use serde_json::json;
 use crate::cli::{ReportFormat, TileInfoFormat};
 use std::collections::BTreeMap;
 
-use crate::mbtiles::{HistogramBucket, MbtilesReport, ZoomHistogram};
+use crate::mbtiles::{HistogramBucket, MbtilesReport, TileSummary, ZoomHistogram};
 
 use std::collections::BTreeSet;
 
@@ -386,6 +386,17 @@ pub fn format_histogram_table(buckets: &[HistogramBucket]) -> Vec<String> {
         ));
     }
     lines
+}
+
+pub fn format_tile_summary_text(summary: &TileSummary) -> Vec<String> {
+    vec![
+        format!("- z={} x={} y={}", summary.zoom, summary.x, summary.y),
+        format!("- Layers in this tile: {}", summary.layer_count),
+        format!("- Features in this tile: {}", summary.total_features),
+        format!("- Vertices in this tile: {}", summary.vertex_count),
+        format!("- Keys in this tile: {}", summary.property_key_count),
+        format!("- Values in this tile: {}", summary.property_value_count),
+    ]
 }
 
 pub fn format_histograms_by_zoom_section(histograms: &[ZoomHistogram]) -> Vec<String> {

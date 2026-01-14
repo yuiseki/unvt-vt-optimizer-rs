@@ -586,17 +586,9 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
                 if let Some(summary) = report.tile_summary.as_ref() {
                     println!();
                     println!("{}", emphasize_section_heading("## Tile Summary"));
-                    println!(
-                        "- z={} x={} y={} layers={} total_features={} vertices={} keys={} values={}",
-                        summary.zoom,
-                        summary.x,
-                        summary.y,
-                        summary.layer_count,
-                        summary.total_features,
-                        summary.vertex_count,
-                        summary.property_key_count,
-                        summary.property_value_count
-                    );
+                    for line in vt_optimizer::output::format_tile_summary_text(summary) {
+                        println!("{}", line);
+                    }
                     for layer in summary.layers.iter() {
                         println!(
                             "  layer: {} features={} vertices={} property_keys={} values={}",
