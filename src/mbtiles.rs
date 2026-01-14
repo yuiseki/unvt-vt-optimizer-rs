@@ -867,7 +867,9 @@ fn build_file_layer_list(
 
     while let Some(row) = rows.next().context("read layer list row")? {
         let row_zoom: u8 = row.get(0)?;
-        if let Some(target) = zoom && row_zoom != target {
+        if let Some(target) = zoom
+            && row_zoom != target
+        {
             continue;
         }
         index += 1;
@@ -903,7 +905,9 @@ fn build_file_layer_list(
             }
         }
 
-        if let Some(SampleSpec::Count(limit)) = sample && index >= *limit {
+        if let Some(SampleSpec::Count(limit)) = sample
+            && index >= *limit
+        {
             break;
         }
     }
@@ -950,7 +954,9 @@ fn build_tile_summary(
         Some(layers_filter.iter().cloned().collect::<HashSet<_>>())
     };
     for layer in layers {
-        if let Some(filter) = filter_set.as_ref() && !filter.contains(&layer.name) {
+        if let Some(filter) = filter_set.as_ref()
+            && !filter.contains(&layer.name)
+        {
             continue;
         }
         let features = reader
@@ -1150,7 +1156,9 @@ fn build_histogram(
     while let Some(row) = rows.next().context("read histogram row")? {
         let row_zoom: u8 = row.get(0)?;
         let length: u64 = row.get(1)?;
-        if let Some(target) = zoom && row_zoom != target {
+        if let Some(target) = zoom
+            && row_zoom != target
+        {
             continue;
         }
         index += 1;
@@ -1164,7 +1172,9 @@ fn build_histogram(
         counts[bucket] += 1;
         bytes[bucket] += length;
 
-        if let Some(SampleSpec::Count(limit)) = sample && counts.iter().sum::<u64>() >= *limit {
+        if let Some(SampleSpec::Count(limit)) = sample
+            && counts.iter().sum::<u64>() >= *limit
+        {
             break;
         }
 
@@ -1315,7 +1325,9 @@ fn build_zoom_histograms(
         accum.used_tiles += 1;
         accum.used_bytes += length;
 
-        if let Some(SampleSpec::Count(limit)) = sample && accum.used_tiles >= *limit {
+        if let Some(SampleSpec::Count(limit)) = sample
+            && accum.used_tiles >= *limit
+        {
             // keep scanning other zooms; no-op for this zoom
         }
 
@@ -1604,7 +1616,9 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
             None
         };
 
-        if let Some(target) = options.zoom && zoom != target {
+        if let Some(target) = options.zoom
+            && zoom != target
+        {
             continue;
         }
 
@@ -1647,20 +1661,22 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
             }
 
             // Collect layer information (when sampling)
-            if collect_layers && tile_data.is_some()
+            if collect_layers
+                && tile_data.is_some()
                 && let Ok(payload) = decode_tile_payload(tile_data.as_ref().unwrap())
                 && let Ok(reader) = Reader::new(payload)
                 && let Ok(layers) = reader.get_layer_metadata()
             {
                 for layer in layers {
-                    let entry = layer_accums.entry(layer.name.clone()).or_insert_with(|| {
-                        LayerAccum {
-                            feature_count: 0,
-                            vertex_count: 0,
-                            property_keys: HashSet::new(),
-                            property_values: HashSet::new(),
-                        }
-                    });
+                    let entry =
+                        layer_accums
+                            .entry(layer.name.clone())
+                            .or_insert_with(|| LayerAccum {
+                                feature_count: 0,
+                                vertex_count: 0,
+                                property_keys: HashSet::new(),
+                                property_values: HashSet::new(),
+                            });
                     entry.feature_count += layer.feature_count as u64;
                     if let Ok(features) = reader.get_features(layer.layer_index) {
                         for feature in features {
@@ -1683,8 +1699,10 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
                 }
             }
 
-            if let (Some(bucket_index), Some(list_options)) = (options.bucket, options.list_tiles.as_ref())
-                && let Some(bucket_idx) = histogram_bucket_index(length, min_len, max_len, options.histogram_buckets)
+            if let (Some(bucket_index), Some(list_options)) =
+                (options.bucket, options.list_tiles.as_ref())
+                && let Some(bucket_idx) =
+                    histogram_bucket_index(length, min_len, max_len, options.histogram_buckets)
                 && bucket_idx == bucket_index
             {
                 bucket_tiles.push(TopTile {
@@ -1704,7 +1722,9 @@ pub fn inspect_mbtiles_with_options(path: &Path, options: InspectOptions) -> Res
             }
         }
 
-        if let Some(SampleSpec::Count(limit)) = options.sample && used >= limit {
+        if let Some(SampleSpec::Count(limit)) = options.sample
+            && used >= limit
+        {
             break;
         }
 

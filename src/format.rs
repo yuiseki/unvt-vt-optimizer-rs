@@ -86,7 +86,9 @@ pub fn validate_output_format_matches_path(
     let declared = TileFormat::from_str(fmt_name)
         .ok_or_else(|| anyhow::anyhow!("unknown output format: {fmt_name}"))?;
 
-    if let Some(path_fmt) = TileFormat::from_extension(path) && path_fmt != declared {
+    if let Some(path_fmt) = TileFormat::from_extension(path)
+        && path_fmt != declared
+    {
         bail!("output format ({fmt_name}) conflicts with output file extension",);
     }
 

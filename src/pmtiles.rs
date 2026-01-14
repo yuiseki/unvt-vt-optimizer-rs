@@ -651,7 +651,9 @@ fn accumulate_tile_counts(
         for idx in 0..run {
             let tile_id = entry.tile_id + idx as u64;
             let (z, _x, _y) = tile_id_to_xyz(tile_id);
-            if let Some(target_zoom) = zoom_filter && z != target_zoom {
+            if let Some(target_zoom) = zoom_filter
+                && z != target_zoom
+            {
                 continue;
             }
             overall.add_tile(length);
@@ -719,7 +721,9 @@ fn build_histogram_from_entries(
             for idx in 0..run {
                 let tile_id = entry.tile_id + idx as u64;
                 let (z, _x, _y) = tile_id_to_xyz(tile_id);
-                if let Some(target_zoom) = zoom_filter && z != target_zoom {
+                if let Some(target_zoom) = zoom_filter
+                    && z != target_zoom
+                {
                     continue;
                 }
                 let mut bucket = ((length.saturating_sub(min_len)) / bucket_size) as usize;
@@ -816,7 +820,9 @@ fn build_zoom_histograms_from_entries(
 
     let mut accums: BTreeMap<u8, ZoomAccum> = BTreeMap::new();
     for (zoom, (min_len, max_len)) in zoom_minmax.iter() {
-        if let Some(target_zoom) = zoom_filter && *zoom != target_zoom {
+        if let Some(target_zoom) = zoom_filter
+            && *zoom != target_zoom
+        {
             continue;
         }
         let range = (max_len - min_len).max(1);
@@ -853,7 +859,9 @@ fn build_zoom_histograms_from_entries(
             for idx in 0..run {
                 let tile_id = entry.tile_id + idx as u64;
                 let (z, _x, _y) = tile_id_to_xyz(tile_id);
-                if let Some(target_zoom) = zoom_filter && z != target_zoom {
+                if let Some(target_zoom) = zoom_filter
+                    && z != target_zoom
+                {
                     continue;
                 }
                 let Some(accum) = accums.get_mut(&z) else {
@@ -969,7 +977,9 @@ fn build_file_layer_list_pmtiles(
             for idx in 0..run {
                 let tile_id = entry.tile_id + idx as u64;
                 let (z, _x, _y) = tile_id_to_xyz(tile_id);
-                if let Some(target_zoom) = options.zoom && z != target_zoom {
+                if let Some(target_zoom) = options.zoom
+                    && z != target_zoom
+                {
                     continue;
                 }
                 index += 1;
