@@ -420,6 +420,15 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
                         report.sample_used_tiles, report.sample_total_tiles
                     );
                 }
+                if let Some(totals) =
+                    vt_optimizer::output::summarize_file_layers(&report.file_layers)
+                {
+                    println!("- Layers in this tile: {}", totals.layer_count);
+                    println!("- Features in this tile: {}", totals.feature_count);
+                    println!("- Vertices in this tile: {}", totals.vertex_count);
+                    println!("- Keys in this tile: {}", totals.property_key_count);
+                    println!("- Values in this tile: {}", totals.property_value_count);
+                }
             }
             if include_zoom && !report.by_zoom.is_empty() {
                 println!();
