@@ -483,13 +483,15 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
                 ) {
                     println!("{}", emphasize_table_header(&line));
                 }
+                if args.zoom.is_none() {
+                    println!(
+                        "Tip: use --zoom option to see histogram and layers by each zoom level."
+                    );
+                }
             }
             if include_histogram && !report.histogram.is_empty() {
                 println!();
                 println!("{}", emphasize_section_heading("## Histogram"));
-                if args.zoom.is_none() {
-                    println!("Tip: use --zoom option to see histogram by each zoom level.");
-                }
                 for line in format_histogram_table(&report.histogram) {
                     println!("{}", emphasize_table_header(&line));
                 }
