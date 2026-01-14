@@ -413,19 +413,30 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
                 println!("{}", emphasize_section_heading("## Summary"));
                 println!(
                     "{}",
-                    format_summary_parts(vec![
-                        ("tiles", report.overall.tile_count.to_string()),
-                        ("total", format_bytes(report.overall.total_bytes)),
-                        ("max", format_bytes(report.overall.max_bytes)),
-                        ("avg", format_bytes(report.overall.avg_bytes)),
-                    ])
+                    format_summary_label("Number of tiles", report.overall.tile_count)
                 );
                 println!(
                     "{}",
-                    format_summary_parts(vec![
-                        ("empty_tiles", report.empty_tiles.to_string()),
-                        ("empty_ratio", format!("{:.4}", report.empty_ratio)),
-                    ])
+                    format_summary_label("Total size", format_bytes(report.overall.total_bytes))
+                );
+                println!(
+                    "{}",
+                    format_summary_label("Max tile size", format_bytes(report.overall.max_bytes))
+                );
+                println!(
+                    "{}",
+                    format_summary_label(
+                        "Average tile size",
+                        format_bytes(report.overall.avg_bytes)
+                    )
+                );
+                println!(
+                    "{}",
+                    format_summary_label("Empty tiles", report.empty_tiles)
+                );
+                println!(
+                    "{}",
+                    format_summary_label("Empty tile ratio", format!("{:.4}", report.empty_ratio))
                 );
                 if report.sampled {
                     println!(
@@ -746,21 +757,6 @@ fn format_inspect_title(path: &std::path::Path) -> String {
 
 fn format_summary_label<T: std::fmt::Display>(label: &str, value: T) -> String {
     format!("- {}: {}", Style::new().fg(Color::Blue).paint(label), value)
-}
-
-fn format_summary_parts(parts: Vec<(&str, String)>) -> String {
-    let mut line = String::from("- ");
-    for (idx, (label, value)) in parts.into_iter().enumerate() {
-        if idx > 0 {
-            line.push(' ');
-        }
-        line.push_str(&format!(
-            "{}: {}",
-            Style::new().fg(Color::Blue).paint(label),
-            value
-        ));
-    }
-    line
 }
 
 fn emphasize_table_header(line: &str) -> String {
