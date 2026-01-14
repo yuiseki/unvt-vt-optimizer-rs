@@ -96,9 +96,9 @@ fn format_top_tiles_lines_includes_size() {
     }];
     let lines = format_top_tiles_lines(&tiles);
     assert_eq!(lines.len(), 1);
-    assert!(lines[0].contains("z=1"));
-    assert!(lines[0].contains("x=2"));
-    assert!(lines[0].contains("y=3"));
+    assert!(lines[0].contains("-z 1"));
+    assert!(lines[0].contains("-x 2"));
+    assert!(lines[0].contains("-y 3"));
     assert!(lines[0].contains("size=2.00KB"));
 }
 

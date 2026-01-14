@@ -559,6 +559,7 @@ v0.0.4 では以下を **含めない**。
 ## 1.66 マイルストーン（v0.4.3）
 
 * `inspect` の text 出力に Top 10 big tiles セクションを追加
+* `inspect` で `-z/-x/-y` 指定時に Tile Summary を表示
 
 ## 2. 用語
 

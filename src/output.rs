@@ -484,7 +484,7 @@ pub fn format_top_tiles_lines(tiles: &[TopTile]) -> Vec<String> {
         .iter()
         .map(|tile| {
             format!(
-                "- z={} x={} y={} size={}",
+                "-z {} -x {} -y {} size={}",
                 tile.zoom,
                 tile.x,
                 tile.y,

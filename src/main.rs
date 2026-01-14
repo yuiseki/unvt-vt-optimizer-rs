@@ -220,6 +220,9 @@ fn main() -> Result<()> {
                     stats: Some("tile_summary".to_string()),
                     no_progress: false,
                     zoom: None,
+                    z: None,
+                    x: None,
+                    y: None,
                     bucket: None,
                     tile: Some(format!("{}/{}/{}", z, x, y)),
                     summary: true,
@@ -247,6 +250,9 @@ fn main() -> Result<()> {
                 stats: None,
                 no_progress: false,
                 zoom: None,
+                z: None,
+                x: None,
+                y: None,
                 bucket: None,
                 tile: None,
                 summary: false,
@@ -284,14 +290,25 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
         Some(value) => Some(parse_sample_spec(value)?),
         None => None,
     };
-    let tile = match args.tile.as_deref() {
+    let mut tile = match args.tile.as_deref() {
         Some(value) => Some(parse_tile_spec(value)?),
         None => None,
     };
-    if args.summary && tile.is_none() {
+    if tile.is_some() && (args.z.is_some() || args.x.is_some() || args.y.is_some()) {
+        anyhow::bail!("--tile cannot be combined with -z/-x/-y");
+    }
+    if tile.is_none() {
+        if let (Some(z), Some(x), Some(y)) = (args.z, args.x, args.y) {
+            tile = Some(vt_optimizer::mbtiles::TileCoord { zoom: z, x, y });
+        } else if args.z.is_some() || args.x.is_some() || args.y.is_some() {
+            anyhow::bail!("-z/-x/-y must be provided together");
+        }
+    }
+    let summary = args.summary || tile.is_some() && args.tile.is_none();
+    if summary && tile.is_none() {
         anyhow::bail!("--summary requires --tile z/x/y");
     }
-    if tile.is_some() && !args.summary {
+    if tile.is_some() && !summary {
         anyhow::bail!("--tile requires --summary");
     }
     let mut layers = args.layers.clone();
@@ -329,7 +346,7 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
         zoom: args.zoom,
         bucket: args.bucket,
         tile,
-        summary: args.summary,
+        summary,
         layers,
         recommend: args.recommend,
         include_layer_list: output == ReportFormat::Text

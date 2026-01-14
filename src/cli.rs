@@ -95,6 +95,18 @@ pub struct InspectArgs {
     #[arg(long)]
     pub zoom: Option<u8>,
 
+    /// Tile zoom (compat: use with -x/-y to show tile summary).
+    #[arg(short = 'z')]
+    pub z: Option<u8>,
+
+    /// Tile x (compat: use with -z/-y to show tile summary).
+    #[arg(short = 'x')]
+    pub x: Option<u32>,
+
+    /// Tile y (compat: use with -z/-x to show tile summary).
+    #[arg(short = 'y')]
+    pub y: Option<u32>,
+
     /// Histogram bucket index (0-based) used with --list-tiles.
     #[arg(long)]
     pub bucket: Option<usize>,
