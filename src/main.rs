@@ -386,8 +386,8 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
             let include_zoom = stats_filter.includes(vt_optimizer::output::StatsSection::Zoom);
             let include_histogram =
                 stats_filter.includes(vt_optimizer::output::StatsSection::Histogram);
-            let include_histogram_by_zoom =
-                stats_filter.includes(vt_optimizer::output::StatsSection::HistogramByZoom);
+            let include_histogram_by_zoom = args.stats.is_some()
+                && stats_filter.includes(vt_optimizer::output::StatsSection::HistogramByZoom);
             let include_layers = stats_filter.includes(vt_optimizer::output::StatsSection::Layers);
             let include_recommendations =
                 stats_filter.includes(vt_optimizer::output::StatsSection::Recommendations);
@@ -475,6 +475,7 @@ fn run_inspect(args: vt_optimizer::cli::InspectArgs) -> Result<()> {
             if include_histogram && !report.histogram.is_empty() {
                 println!();
                 println!("{}", emphasize_section_heading("## Histogram"));
+                println!("Tip: use --zoom option to see histogram by each zoom level.");
                 for line in format_histogram_table(&report.histogram) {
                     println!("{}", emphasize_table_header(&line));
                 }

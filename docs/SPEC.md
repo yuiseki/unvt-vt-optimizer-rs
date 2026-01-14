@@ -554,6 +554,7 @@ v0.0.4 では以下を **含めない**。
 ## 1.65 マイルストーン（v0.4.1）
 
 * `inspect` の text 出力で Zoom セクションをテーブル表示に変更（%tiles/%size/acc% 追加）
+* `inspect` の text 出力から Histogram by Zoom セクションを除外し、Histogram に注意書きを追加
 
 ## 2. 用語
 
