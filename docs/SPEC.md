@@ -58,6 +58,7 @@ vt-optimizer-rs は、**Mapbox Vector Tiles (MVT)** を格納した **MBTiles / 
 将来検討:
 
 * 互換モード向けに WAL 無効化オプションを追加する。
+* PMTiles v2 の読み取り対応を追加する。
 
 ---
 
@@ -87,7 +88,7 @@ vt-optimizer-rs は、**Mapbox Vector Tiles (MVT)** を格納した **MBTiles / 
 
 ### 3.2 PMTiles（v3）
 
-* 入力/出力とも **PMTiles v3** を基本対象とする（まず v3、必要なら v2 読み取りを将来検討）。
+* 入力/出力とも **PMTiles v3** を基本対象とする。
 * PMTiles は「単一ファイルのタイルアーカイブ」で、一般にリモート Range を想定した設計だが、本仕様では **ローカルファイルとして読み書き** する。
 * PMTiles は **read-only 形式**であり、原則「in-place 更新」ではなく「再生成」になる。
 
