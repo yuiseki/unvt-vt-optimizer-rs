@@ -55,6 +55,10 @@ vt-optimizer-rs は、**Mapbox Vector Tiles (MVT)** を格納した **MBTiles / 
 * 対話 UI（Inquirer 的なもの）は **提供しない**。古き良き CLI（引数 + stdout/stderr）。
 * Style の paint/layout の全表現を完全再現（レンダラ互換の厳密さ）は当面非ゴール。prune のために必要な範囲から段階的に拡張する。
 
+将来検討:
+
+* 互換モード向けに WAL 無効化オプションを追加する。
+
 ---
 
 ## 1.3 マイルストーン
