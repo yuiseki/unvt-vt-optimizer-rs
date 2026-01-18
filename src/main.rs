@@ -145,6 +145,7 @@ fn main() -> Result<()> {
                     drop_empty_tiles: false,
                     checkpoint: None,
                     resume: false,
+                    report_format: ReportFormat::Text,
                 };
                 run_optimize(args)?;
                 return Ok(());
@@ -748,7 +749,17 @@ fn run_optimize(args: vt_optimizer::cli::OptimizeArgs) -> Result<()> {
                 },
             )?;
             println!("- Writing output file to {}", output_path.display());
-            print_prune_summary(&stats);
+
+            match args.report_format {
+                ReportFormat::Json => {
+                    let report = vt_optimizer::output::OptimizeReport { summary: stats };
+                    let json = serde_json::to_string_pretty(&report)?;
+                    println!("{}", json);
+                }
+                _ => {
+                    print_prune_summary(&stats);
+                }
+            }
         }
         (vt_optimizer::format::TileFormat::Pmtiles, vt_optimizer::format::TileFormat::Pmtiles) => {
             let apply_filters = args.style_mode == vt_optimizer::cli::StyleMode::LayerFilter;
@@ -761,7 +772,16 @@ fn run_optimize(args: vt_optimizer::cli::OptimizeArgs) -> Result<()> {
                 args.unknown_filter == vt_optimizer::cli::UnknownFilterMode::Keep,
             )?;
             println!("- Writing output file to {}", output_path.display());
-            print_prune_summary(&stats);
+            match args.report_format {
+                ReportFormat::Json => {
+                    let report = vt_optimizer::output::OptimizeReport { summary: stats };
+                    let json = serde_json::to_string_pretty(&report)?;
+                    println!("{}", json);
+                }
+                _ => {
+                    print_prune_summary(&stats);
+                }
+            }
         }
         _ => {
             anyhow::bail!("v0.0.47 only supports matching input/output formats for optimize");

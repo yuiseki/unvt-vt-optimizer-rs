@@ -6,9 +6,14 @@ use crate::cli::{ReportFormat, TileInfoFormat};
 use std::collections::BTreeMap;
 
 use crate::mbtiles::{
-    FileLayerSummary, HistogramBucket, MbtilesReport, MbtilesZoomStats, TileSummary, TopTile,
-    ZoomHistogram,
+    FileLayerSummary, HistogramBucket, MbtilesReport, MbtilesZoomStats, PruneStats, TileSummary,
+    TopTile, ZoomHistogram,
 };
+
+#[derive(Debug, serde::Serialize)]
+pub struct OptimizeReport {
+    pub summary: PruneStats,
+}
 
 use std::collections::BTreeSet;
 

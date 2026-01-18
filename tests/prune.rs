@@ -1,121 +1,19 @@
 use std::fs;
-use std::path::Path;
 
-use mvt::{GeomEncoder, GeomType, Tile};
 use mvt_reader::Reader;
 
 use vt_optimizer::mbtiles::{PruneOptions, inspect_mbtiles, prune_mbtiles_layer_only};
 use vt_optimizer::style::read_style;
 
-fn create_layer_tile() -> Vec<u8> {
-    let mut tile = Tile::new(4096);
+mod common;
 
-    let layer = tile.create_layer("roads");
-    let geom = GeomEncoder::new(GeomType::Point)
-        .point(1.0, 2.0)
-        .expect("point")
-        .encode()
-        .expect("encode");
-    let mut feature = layer.into_feature(geom);
-    feature.add_tag_string("class", "primary");
-    let layer = feature.into_layer();
-    tile.add_layer(layer).expect("add roads");
-
-    let layer = tile.create_layer("buildings");
-    let geom = GeomEncoder::new(GeomType::Point)
-        .point(3.0, 4.0)
-        .expect("point")
-        .encode()
-        .expect("encode");
-    let mut feature = layer.into_feature(geom);
-    feature.add_tag_string("height", "10");
-    let layer = feature.into_layer();
-    tile.add_layer(layer).expect("add buildings");
-
-    tile.to_bytes().expect("tile bytes")
-}
-
-fn create_layer_mbtiles(path: &Path) {
-    let conn = rusqlite::Connection::open(path).expect("open");
-    conn.execute_batch(
-        "
-        CREATE TABLE metadata (name TEXT, value TEXT);
-        CREATE TABLE tiles (
-            zoom_level INTEGER,
-            tile_column INTEGER,
-            tile_row INTEGER,
-            tile_data BLOB
-        );
-        ",
-    )
-    .expect("schema");
-
-    let data = create_layer_tile();
-    conn.execute(
-        "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (0, 0, 0, ?1)",
-        (data,),
-    )
-    .expect("tile insert");
-}
-
-fn create_layer_mbtiles_multiple(path: &Path) {
-    let conn = rusqlite::Connection::open(path).expect("open");
-    conn.execute_batch(
-        "
-        CREATE TABLE metadata (name TEXT, value TEXT);
-        CREATE TABLE tiles (
-            zoom_level INTEGER,
-            tile_column INTEGER,
-            tile_row INTEGER,
-            tile_data BLOB
-        );
-        ",
-    )
-    .expect("schema");
-
-    let data = create_layer_tile();
-    conn.execute(
-        "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (0, 0, 0, ?1)",
-        (data.clone(),),
-    )
-    .expect("tile insert 0");
-    conn.execute(
-        "INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (0, 0, 1, ?1)",
-        (data,),
-    )
-    .expect("tile insert 1");
-}
-
-fn create_layer_mbtiles_map_images(path: &Path) {
-    let conn = rusqlite::Connection::open(path).expect("open");
-    conn.execute_batch(
-        "
-        CREATE TABLE metadata (name TEXT, value TEXT);
-        CREATE TABLE map (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_id TEXT);
-        CREATE TABLE images (tile_id TEXT, tile_data BLOB);
-        ",
-    )
-    .expect("schema");
-
-    let data = create_layer_tile();
-    conn.execute(
-        "INSERT INTO map (zoom_level, tile_column, tile_row, tile_id) VALUES (0, 0, 0, 't1')",
-        [],
-    )
-    .expect("map insert");
-    conn.execute(
-        "INSERT INTO images (tile_id, tile_data) VALUES ('t1', ?1)",
-        (data,),
-    )
-    .expect("image insert");
-}
 #[test]
 fn prune_mbtiles_removes_unlisted_layers() {
     let dir = tempfile::tempdir().expect("tempdir");
     let input = dir.path().join("input.mbtiles");
     let output = dir.path().join("output.mbtiles");
     let style = dir.path().join("style.json");
-    create_layer_mbtiles(&input);
+    common::create_layer_mbtiles(&input);
 
     fs::write(
         &style,
@@ -161,7 +59,7 @@ fn prune_mbtiles_supports_map_images_schema() {
     let input = dir.path().join("input.mbtiles");
     let output = dir.path().join("output.mbtiles");
     let style = dir.path().join("style.json");
-    create_layer_mbtiles_map_images(&input);
+    common::create_layer_mbtiles_map_images(&input);
 
     fs::write(
         &style,
@@ -198,7 +96,7 @@ fn prune_mbtiles_handles_multiple_tiles() {
     let output = dir.path().join("output.mbtiles");
     let style = dir.path().join("style.json");
 
-    create_layer_mbtiles_multiple(&input);
+    common::create_layer_mbtiles_multiple(&input);
 
     fs::write(
         &style,
@@ -248,9 +146,9 @@ fn prune_mbtiles_filters_features_by_style() {
     )
     .expect("schema");
 
-    let mut tile = Tile::new(4096);
+    let mut tile = mvt::Tile::new(4096);
     let layer = tile.create_layer("roads");
-    let geom = GeomEncoder::new(GeomType::Point)
+    let geom = mvt::GeomEncoder::new(mvt::GeomType::Point)
         .point(1.0, 2.0)
         .expect("point")
         .encode()
@@ -258,7 +156,7 @@ fn prune_mbtiles_filters_features_by_style() {
     let mut feature = layer.into_feature(geom);
     feature.add_tag_string("class", "primary");
     let layer = feature.into_layer();
-    let geom = GeomEncoder::new(GeomType::Point)
+    let geom = mvt::GeomEncoder::new(mvt::GeomType::Point)
         .point(3.0, 4.0)
         .expect("point")
         .encode()
@@ -328,7 +226,7 @@ fn prune_mbtiles_keeps_features_on_unknown_filter() {
     let output = dir.path().join("output.mbtiles");
     let style_path = dir.path().join("style.json");
 
-    create_layer_mbtiles(&input);
+    common::create_layer_mbtiles(&input);
 
     fs::write(
         &style_path,
@@ -375,7 +273,7 @@ fn prune_mbtiles_drops_features_on_unknown_filter_when_configured() {
     let output = dir.path().join("output.mbtiles");
     let style_path = dir.path().join("style.json");
 
-    create_layer_mbtiles(&input);
+    common::create_layer_mbtiles(&input);
 
     fs::write(
         &style_path,
@@ -421,7 +319,7 @@ fn prune_mbtiles_handles_multiple_readers() {
     let output = dir.path().join("output.mbtiles");
     let style = dir.path().join("style.json");
 
-    create_layer_mbtiles_multiple(&input);
+    common::create_layer_mbtiles_multiple(&input);
 
     fs::write(
         &style,
@@ -458,7 +356,7 @@ fn prune_mbtiles_drop_empty_tiles() {
     let output = dir.path().join("output.mbtiles");
     let style = dir.path().join("style.json");
 
-    create_layer_mbtiles_multiple(&input);
+    common::create_layer_mbtiles_multiple(&input);
 
     fs::write(
         &style,

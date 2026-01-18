@@ -47,6 +47,9 @@ geo-types = "0.7"
 crossbeam-channel = "0.5"
 
 [dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+
 
 [lib]
 name = "vt_optimizer"

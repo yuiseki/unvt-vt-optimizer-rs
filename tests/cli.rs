@@ -1,7 +1,43 @@
+use assert_cmd::prelude::*;
 use clap::{CommandFactory, Parser};
+use predicates::prelude::*;
+use std::process::Command as TestCommand;
 
 use vt_optimizer::cli::ReportFormat;
 use vt_optimizer::cli::{Cli, Command, StyleMode, TileInfoFormat, UnknownFilterMode};
+
+mod common;
+
+#[test]
+#[allow(deprecated)]
+fn optimize_outputs_json_report() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
+    let input = dir.path().join("input.mbtiles");
+    let output = dir.path().join("output.mbtiles");
+    let style = dir.path().join("style.json");
+    common::create_layer_mbtiles(&input);
+
+    std::fs::write(
+        &style,
+        r#"{"version":8,"sources":{"osm":{"type":"vector"}},"layers":[{"id":"roads","type":"line","source":"osm","source-layer":"roads"}]}"#,
+    )?;
+
+    let mut cmd = TestCommand::cargo_bin("vt-optimizer")?;
+    cmd.arg("optimize")
+        .arg(&input)
+        .arg("--output")
+        .arg(&output)
+        .arg("--style")
+        .arg(&style)
+        .arg("--report-format")
+        .arg("json");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("\"summary\":"));
+
+    Ok(())
+}
 
 #[test]
 fn parse_optimize_minimal() {
