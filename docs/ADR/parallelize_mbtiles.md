@@ -19,14 +19,22 @@ part of the primary key.
 
 ## Decision
 
-Parallelize MBTiles histogram computations by scanning per zoom level in
-parallel using multiple read-only SQLite connections. Each worker executes:
+Parallelize MBTiles scans by zoom level using multiple read-only SQLite
+connections. Each worker executes:
 
 - `SELECT LENGTH(tile_data) FROM <source> WHERE zoom_level = ?`
 
 Workers aggregate per-zoom counts/bytes in memory and reduce the results into
 final histogram structures. This uses Rayon for CPU parallelism while allowing
 SQLite to perform I/O from multiple readers.
+
+For `inspect` processing, use a two-pass strategy:
+
+1) Pass 1: per-zoom scan to compute stats, min/max, topn, and sampled metadata
+2) Pass 2: per-zoom scan to compute bucket/list results using the finalized
+   min/max bounds
+
+This removes order-dependence from bucket selection while preserving accuracy.
 
 Sampling is applied per zoom level:
 
