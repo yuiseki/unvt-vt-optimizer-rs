@@ -30,20 +30,18 @@ impl StatAccum {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct LayerAccum {
     pub feature_count: u64,
     pub vertex_count: u64,
+    pub layer_type: Option<String>,
     pub property_keys: HashSet<String>,
     pub property_values: HashSet<String>,
 }
 
 impl LayerAccum {
     pub fn new() -> Self {
-        Self {
-            feature_count: 0,
-            vertex_count: 0,
-            property_keys: HashSet::new(),
-            property_values: HashSet::new(),
-        }
+        Self::default()
     }
 }
+

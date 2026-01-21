@@ -1,6 +1,6 @@
 use crate::pmtiles::{
-    types::{Entry, HEADER_SIZE},
     Header,
+    types::{Entry, HEADER_SIZE},
 };
 use anyhow::{Context, Result};
 use hilbert_2d::{Variant, h2xy_discrete, xy2h_discrete};

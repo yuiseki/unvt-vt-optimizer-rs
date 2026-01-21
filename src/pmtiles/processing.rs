@@ -1,16 +1,16 @@
-
 use crate::mbtiles::{
-    HistogramBucket, InspectOptions, MbtilesReport, MbtilesZoomStats, TileListOptions,
+    HistogramBucket, InspectOptions, MbtilesReport, MbtilesZoomStats, PruneStats, TileListOptions,
     TileSort, TopTile, ZoomHistogram, count_vertices, encode_tile_payload, format_property_value,
-    prune_tile_layers, simplify_tile_payload, PruneStats,
+    prune_tile_layers, simplify_tile_payload,
 };
 use crate::pmtiles::{
+    LayerAccum, StatAccum,
     algo::{
-        decode_directory, encode_directory, histogram_bucket_index_pmtiles, splitmix64,
-        tile_id_from_xyz, tile_id_to_xyz, build_header,
+        build_header, decode_directory, encode_directory, histogram_bucket_index_pmtiles,
+        splitmix64, tile_id_from_xyz, tile_id_to_xyz,
     },
-    types::{Entry, Header, ProgressTracker, HEADER_SIZE, MAGIC, VERSION},
-    LayerAccum, StatAccum, build_header_with_metadata, progress_for_phase,
+    build_header_with_metadata, progress_for_phase,
+    types::{Entry, HEADER_SIZE, Header, MAGIC, ProgressTracker, VERSION},
 };
 use anyhow::{Context, Result};
 use brotli::{CompressorWriter, Decompressor};
@@ -43,7 +43,6 @@ pub fn include_sample(index: u64, total: u64, sample: Option<&crate::mbtiles::Sa
         }
     }
 }
-
 
 pub fn read_u8(input: &mut &[u8]) -> Result<u8> {
     if input.is_empty() {
@@ -830,12 +829,7 @@ pub fn build_file_layer_list_pmtiles(
                 .get_layer_metadata()
                 .map_err(|err| anyhow::anyhow!("read layer metadata: {err}"))?;
             for layer in layers {
-                let entry = map.entry(layer.name.clone()).or_insert_with(|| LayerAccum {
-                    feature_count: 0,
-                    vertex_count: 0,
-                    property_keys: HashSet::new(),
-                    property_values: HashSet::new(),
-                });
+                let entry = map.entry(layer.name.clone()).or_default();
                 entry.feature_count += (layer.feature_count as u64) * selected;
                 let features = reader
                     .get_features(layer.layer_index)
@@ -1228,8 +1222,7 @@ pub fn prune_pmtiles_layer_only(
     if header.metadata_length > 0 {
         file.seek(SeekFrom::Start(header.metadata_offset))
             .context("seek metadata")?;
-        file.write_all(&metadata_bytes)
-            .context("write metadata")?;
+        file.write_all(&metadata_bytes).context("write metadata")?;
     }
     file.seek(SeekFrom::Start(header.data_offset))
         .context("seek data")?;
